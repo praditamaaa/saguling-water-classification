@@ -4,7 +4,7 @@ Tugas besar mata kuliah Pengolahan Citra Digital (PCD), D4 Teknik Informatika, P
 
 Penelitian ini menguji seberapa andal metode segmentasi air yang sudah terbit (indeks NDWI dan MNDWI dengan ambang tetap, Otsu, dan Canny–Otsu, ditambah morfologi) ketika permukaan waduk tertutup eceng gondok dan keramba jaring apung (KJA). Data: citra Sentinel-2 di Google Earth Engine (GEE).
 
-**Tim:** [Nama – NIM], [Nama – NIM] · **Dosen pengampu:** [nama] · **Status:** protokol data referensi selesai; berikutnya sesi kalibrasi dan digitasi lima penilai.
+**Tim:** Muhammad Nabil Syauqi Rasyiq - 241524018, Praditama Ajmal Hasan - 241524023  · **Status:** protokol data referensi selesai; berikutnya sesi kalibrasi dan digitasi lima penilai.
 
 ## Latar belakang singkat
 
