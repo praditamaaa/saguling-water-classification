@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Sistem operasi dan editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Berkas sementara Office
+~$*
+
+# Citra dan berkas besar tidak disimpan di repository; citra tetap di GEE
+*.tif
+*.tiff
+*.zip
+
+# Lembar catatan penilai yang memuat nama
+data/pribadi/

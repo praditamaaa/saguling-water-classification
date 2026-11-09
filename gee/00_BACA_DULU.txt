@@ -1,0 +1,129 @@
+PAKET SKRIP PENELITIAN PCD — SEGMENTASI PERMUKAAN WADUK SAGULING
+=================================================================
+
+Semua hasil sengaja KOSONG. Mulai dari Langkah 01 dan isi parameter
+setiap langkah dari hasil langkah sebelumnya.
+
+
+1. PERSIAPAN SEKALI SAJA
+------------------------
+a. Buka https://code.earthengine.google.com
+b. Buat skrip baru untuk setiap file .js di paket ini (nama boleh sama).
+c. Di setiap skrip, variabel ASSET bernilai:
+       'projects/earth-engine-511102/assets/'
+   Ganti bila proyek GEE kalian berbeda (lihat tab Assets).
+d. Buat folder PCD_Saguling di Google Drive (tempat semua CSV).
+e. Catat setiap hasil Run di 10_pemetaan_skrip_dan_hasil.xlsx
+   (di repository: docs/10_pemetaan_skrip_dan_hasil.xlsx; skrip 09 ada di python/).
+
+
+2. URUTAN LANGKAH
+-----------------
+No  File                                          Mengisi dari        Menghasilkan
+--  --------------------------------------------  ------------------  ---------------------------------------------
+01  01_mengeksplorasi_tanggal_citra.js            —                   CSV 01_statistik_per_tanggal
+02  02_memilih_tanggal_waduk_penuh.js             —                   T1, T2 (kamu pilih);
+                                                                      Asset saguling_tanggal_penuh_<v>;
+                                                                      CSV 02_tanggal_waduk_penuh_<v>
+03  03_mengecek_petak_uji.js                      T1, T2              koordinat petak A, B, C
+04  04_mengecek_vegetasi_apung_dan_mencari_kja.js T1, koordinat,      koordinat final (B dinamis? lokasi KJA)
+                                                  versi tanggal
+05  05_menyimpan_petak_final.js                   T1, T2, koordinat   Asset saguling_petak_<v> (berisi T1 dan T2)
+06a 06a_kalibrasi_p1.js ... p5.js (5 file)        PUSAT latihan       tidak ada Asset; luas latihan di Console
+06b 06b_digitasi_p1.js  ... p5.js (5 file)        versi petak         Asset saguling_ref_<petak>_<T>_<pN>_v1
+                                                                      (6 per penilai, 30 seluruhnya)
+06c 06c_voting_lima_penilai.js                    30 Asset 06b        Asset saguling_ref_<petak>_<T>_vote_<v> (6);
+                                                                      CSV 06c_kesepakatan_vote_<v>,
+                                                                      CSV 06c_iou_pasangan_vote_<v>
+07  07_menyegmentasi_12_konfigurasi.js            versi petak         Asset saguling_peta_T1_<v>, saguling_peta_T2_<v>;
+     MODE 'setel' -> 'ekspor' -> 'periksa'                            CSV 07_ambang_otomatis_<v>
+08  08_mengevaluasi_akurasi.js                    versi petak, ref    CSV 08_evaluasi_<v ref>_<v peta> (432 baris);
+                                                  vote, dan peta      PNG Gambar 2; tabel silsilah versi
+09  09_membuat_tabel_hasil.py                     CSV 07, 08, 06c     tabel_hasil.md (Tabel VIII–XIII)
+10  10_pemetaan_skrip_dan_hasil.xlsx             semua langkah        catatan hasil + rumus tabel naskah
+
+Mulai Langkah 05, T1/T2 dan koordinat TIDAK perlu disalin lagi:
+langkah 06–08 membacanya dari Asset saguling_petak_<v>.
+
+LIMA PENILAI (lihat dokumen Panduan Penilai)
+  Langkah 06a dan 06b disediakan lima file, satu per penilai (p1, p2 =
+  anggota tim; p3–p5 = luar tim). Lapisan gambar GEE tersimpan di dalam
+  file skrip, jadi setiap penilai harus punya file sendiri agar gambarnya
+  tidak bercampur. Isi kelima file sama; yang berbeda hanya kode penilai.
+  Buat lima skrip di GEE dengan nama file persis sama, lalu tempel isinya.
+  Anggota tim (p1, p2) menggambar SEBELUM Langkah 07 pernah dijalankan.
+
+
+3. VERSI ASSET (pengganti "timpa dan arsipkan")
+-----------------------------------------------
+GEE tidak mau menimpa Asset yang sudah ada. Karena itu setiap Asset
+diberi akhiran versi: v1, v2, v3, dan seterusnya. Asset lama tidak pernah
+dihapus; versi lama otomatis menjadi arsip dan bisa dibandingkan.
+
+Ada empat jenis versi, masing-masing ditulis oleh satu langkah:
+
+  Versi           Ditulis oleh   Dibaca oleh
+  --------------  -------------  -----------------
+  VERSI_TANGGAL   Langkah 02     Langkah 04
+  VERSI_PETAK     Langkah 05     Langkah 06a, 06b, 06c, 07, 08
+  VERSI_REF       Langkah 06b    Langkah 06c (sebagai VERSI_PENILAI)
+                  ('pN_v1')
+  VERSI_VOTE      Langkah 06c    Langkah 08 (sebagai VERSI_REF = 'vote_v1')
+  VERSI_PETA      Langkah 07     Langkah 07 (periksa), 08
+
+Cara mengulang sebuah langkah:
+  a. Naikkan versi yang DITULIS langkah itu (misal VERSI_PETAK 'v1' -> 'v2').
+  b. Jalankan langkah itu dan RUN task-nya.
+  c. Ganti versi yang DIBACA di langkah-langkah sesudahnya.
+  d. Ulangi langkah sesudahnya yang ikut terdampak (tabel di bawah).
+  e. Catat versi baru dan alasannya di Excel Tabel 13.
+
+Apa yang ikut diulang bila sesuatu diganti:
+
+  Yang diganti               Ulangi langkah              Catatan
+  -------------------------  --------------------------  ----------------------------------------------
+  T1/T2 (Langkah 02)         03, 04, 05, 06a, 06b,       referensi digambar ulang oleh kelima penilai,
+                             06c, 07, 08                 karena terikat tanggal
+  Lokasi petak (03/04)       05, 06b (petak yang pindah  peta 07 tidak perlu diulang (mencakup seluruh
+                             saja), 06c, 08              waduk); cek apakah petak baru sempat terlihat
+                                                         saat menyetel parameter
+  Parameter segmentasi (07)  07 ekspor, 08               —
+  Gambar satu penilai (06b)  06b penilai itu, 06c, 08    penilai itu memakai 'pN_v2'; kelima penilai
+                                                         harus memakai versi yang sama di 06c, jadi
+                                                         penilai lain cukup mengekspor ulang sebagai
+                                                         'pN_v2' tanpa mengubah gambar
+
+Langkah 06c dan 08 mencetak "Silsilah versi": setiap referensi harus
+berasal dari versi petak yang sama dengan VERSI_PETAK. Bila ada yang
+"TIDAK", referensi itu digambar di petak lama dan harus digambar ulang.
+
+CSV di Google Drive tidak pernah tertimpa: nama filenya memuat versi.
+
+
+4. KAPAN HARUS KLIK "RUN" DI TAB TASKS
+--------------------------------------
+Ekspor (CSV/Asset) tidak berjalan otomatis. Setelah Run skrip, buka tab
+Tasks (kanan atas) dan klik RUN pada setiap task. Tunggu sampai selesai
+sebelum menjalankan langkah yang memakai hasilnya.
+
+
+5. JIKA ERROR
+-------------
+- "Isi T1 dan T2 dulu ..."   -> parameter di bagian 0 masih kosong.
+- "Asset not found"          -> task ekspor langkah sebelumnya belum selesai,
+                                path ASSET berbeda, atau versi yang dibaca
+                                belum pernah dibuat.
+- "Cannot overwrite asset"   -> versi itu sudah ada; naikkan versinya.
+- "Masih ada ... Asset penilai yang belum ada" (06c)
+                             -> ada penilai yang belum mengekspor; daftar
+                                Asset yang kurang dicetak di Console.
+- "Koordinator belum mengisi PUSAT" (06a)
+                             -> isi koordinat petak latihan di kelima file.
+- "Unable to export features with null geometry"
+                             -> sudah diperbaiki di Langkah 02; bila muncul
+                                di skrip lain, beri fitur geometri (AOI).
+- "Computation timed out"    -> perbesar zoom peta, atau jalankan ulang.
+- Ambang bernilai -9         -> pita Canny kosong: turunkan TAU_C atau
+                                perlebar RB_PX di Langkah 07 mode 'setel'.
+Skrip ini belum pernah dijalankan di akun kalian. Bila muncul error lain,
+salin pesan error lengkap dari Console.

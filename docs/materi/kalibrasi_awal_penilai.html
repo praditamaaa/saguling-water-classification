@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kalibrasi Awal Penilai</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: satu kolom bacaan; stepper peta di kiri, keterangan langkah di kanan pada layar lebar. */
+:root {
+  --bg: #F1F4F3; --surface: #FFFFFF; --ink: #15232A; --muted: #55646A; --line: #D3DBD9;
+  --accent: #0D6B6B; --accent-ink: #FFFFFF; --chip: #E3EAE8; --ok: #1E7A4C; --bad: #B3261E;
+  --ok-bg: #E3F2EA; --bad-bg: #FBE9E7;
+  --f-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0E191D; --surface: #152429; --ink: #E4EDEB; --muted: #9AAAAE; --line: #2A3C42;
+  --accent: #52B5B1; --accent-ink: #0E191D; --chip: #1E3238; --ok: #62C990; --bad: #F2867E;
+  --ok-bg: #173327; --bad-bg: #3A1D1B; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0E191D; --surface: #152429; --ink: #E4EDEB; --muted: #9AAAAE; --line: #2A3C42;
+  --accent: #52B5B1; --accent-ink: #0E191D; --chip: #1E3238; --ok: #62C990; --bad: #F2867E;
+  --ok-bg: #173327; --bad-bg: #3A1D1B; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; }
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2 { font-family: var(--f-display); font-weight: 500; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(32px, 5vw, 46px); }
+h2 { font-size: clamp(24px, 3.2vw, 30px); }
+p { margin: 0; }
+.eyebrow { font-family: var(--f-mono); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.lead { max-width: 64ch; color: var(--muted); font-size: 17px; }
+code, .mono { font-family: var(--f-mono); font-size: .92em; }
+header { display: flex; flex-direction: column; gap: 14px; }
+section { display: flex; flex-direction: column; gap: 20px; }
+.stage { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 32px; align-items: start; }
+@media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.map { width: 100%; max-width: 420px; aspect-ratio: 1; border-radius: 6px; display: block; }
+.panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.stepno { font-family: var(--f-mono); font-size: 14px; color: var(--muted); }
+.steptitle { font-family: var(--f-display); font-size: 24px; font-weight: 500; line-height: 1.2; }
+.cap { max-width: 56ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 14px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 16px; height: 16px; border-radius: 3px; flex: none; }
+.controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+button { font: 500 15px var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 14px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible, .opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.dots { display: flex; gap: 6px; flex: 1; min-width: 120px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.dot.on { background: var(--accent); }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.stat { background: var(--chip); border-radius: 6px; padding: 10px 12px; }
+.stat b { display: block; font-family: var(--f-mono); font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.stat small { color: var(--muted); font-size: 13px; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.rule { border-top: 2px solid var(--ink); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.rule strong { font-weight: 600; }
+.rule p { color: var(--muted); font-size: 15px; }
+.quiz { display: flex; flex-direction: column; gap: 18px; }
+.q { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.q h3 { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.4; }
+.q .qn { font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+.opts { display: flex; flex-direction: column; gap: 8px; }
+.opt { text-align: left; font-weight: 400; width: 100%; background: var(--bg); }
+.opt.right { background: var(--ok-bg); border-color: var(--ok); }
+.opt.wrong { background: var(--bad-bg); border-color: var(--bad); }
+.fb { font-size: 15px; }
+.fb .tag { font-weight: 600; }
+.fb.ok .tag { color: var(--ok); }
+.fb.no .tag { color: var(--bad); }
+.score { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.score b { font-family: var(--f-mono); font-size: 20px; font-weight: 500; }
+footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Penelitian PCD · Waduk Saguling</p>
+  <h1>Kalibrasi Awal Penilai</h1>
+  <p class="lead">Halaman ini dibuka sebelum sesi kalibrasi. Ikuti tujuh langkah di peta contoh, baca empat aturan sesi, lalu jawab enam pertanyaan cek pemahaman. Petak di sini hanya ilustrasi, bukan petak A, B, atau C.</p>
+</header>
+
+<section aria-labelledby="h-proses">
+  <h2 id="h-proses">Yang kamu lakukan di Google Earth Engine</h2>
+  <div class="stage">
+    <svg id="map" class="map" viewBox="0 0 360 360" role="img" aria-labelledby="map-t">
+      <title id="map-t">Petak contoh 1 × 1 km dengan air, eceng gondok, keramba, dan daratan</title>
+      <defs><clipPath id="cp"><rect width="360" height="360"/></clipPath></defs>
+      <g clip-path="url(#cp)">
+        <rect width="360" height="360" fill="#8f3b4a"/>
+        <rect x="18" y="296" width="62" height="44" fill="#a59a92"/>
+        <polygon fill="#1b2a44" points="110,0 360,0 360,290 295,322 222,308 172,262 132,212 92,152 80,82 98,30"/>
+        <polygon fill="#e0566a" points="120,165 150,158 174,174 182,200 168,222 146,228 132,212 122,190"/>
+        <g id="kja"></g>
+        <g id="grid"></g>
+        <path id="gl" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.5" d=""/>
+        <g id="draw"></g>
+      </g>
+      <rect x="1" y="1" width="358" height="358" fill="none" stroke="#F2C94C" stroke-width="2"/>
+    </svg>
+    <div class="panel">
+      <p class="stepno" id="stepno"></p>
+      <p class="steptitle" id="steptitle"></p>
+      <p class="cap" id="cap"></p>
+      <div class="legend" id="leg"></div>
+      <div class="stats" id="stats" hidden></div>
+      <div class="controls">
+        <button id="prev" type="button">Sebelumnya</button>
+        <div class="dots" id="dots" aria-hidden="true"></div>
+        <button id="replay" type="button">Putar ulang</button>
+        <button id="next" type="button" class="primary">Berikutnya</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="h-aturan">
+  <h2 id="h-aturan">Empat aturan selama digitasi utama</h2>
+  <div class="rules">
+    <div class="rule"><strong>Hanya filemu sendiri</strong><p>Jangan membuka skrip <span class="mono">06b_digitasi</span> penilai lain atau aset <span class="mono">saguling_ref_*</span> di panel Assets.</p></div>
+    <div class="rule"><strong>Tanpa indeks dan hasil</strong><p>Jangan menyalakan layer NDWI, MNDWI, atau peta hasil segmentasi.</p></div>
+    <div class="rule"><strong>Basemap untuk jenis objek</strong><p>Basemap resolusi tinggi boleh untuk mengenali keramba atau rumah, bukan untuk menarik garis tepi.</p></div>
+    <div class="rule"><strong>Ragu? Putuskan dan catat</strong><p>Pilih kelas yang paling mungkin, tulis keyakinan 1 di lembar catatan. Jangan bertanya ke penilai lain.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="h-cek">
+  <h2 id="h-cek">Cek pemahaman</h2>
+  <p class="lead">Pilih satu jawaban per pertanyaan. Penjelasan muncul setelah memilih. Bila ada yang salah, bahas dengan koordinator saat pengarahan.</p>
+  <div class="quiz" id="quiz"></div>
+  <div class="score"><span>Benar: <b id="skor">0 dari 6</b></span><button id="ulang" type="button">Ulangi pertanyaan</button></div>
+</section>
+
+<footer>Aturan lengkap ada di dokumen Panduan Penilai, bagian 4–7. Lapisan yang digambar: <span class="mono">air_&lt;petak&gt;_&lt;T&gt;</span>, <span class="mono">eg_&lt;petak&gt;_&lt;T&gt;</span>, <span class="mono">kja_&lt;petak&gt;_&lt;T&gt;</span>.</footer>
+</div>
+
+<script>
+(function () {
+  var NS = 'http://www.w3.org/2000/svg';
+  var rm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var W = [[110,0],[360,0],[360,290],[295,322],[222,308],[172,262],[132,212],[92,152],[80,82],[98,30]];
+  var E = [[120,165],[150,158],[174,174],[182,200],[168,222],[146,228],[132,212],[122,190]];
+  var K = [[246,36],[324,36],[324,94],[246,94]];
+  var shore = [3,4,5,6,7,8,9];
+  function sc(p, c, s) { return p.map(function (v, i) { return shore.indexOf(i) >= 0 ? [c[0] + (v[0]-c[0])*s, c[1] + (v[1]-c[1])*s] : v; }); }
+  var P = [W, sc(W,[260,140],1.04), sc(W,[260,140],0.965), sc(W,[260,140],1.02), sc(W,[260,140],0.985)];
+  var PCOL = ['#85B7EB','#F0997B','#5DCAA5','#FAC775','#D4A5F5'];
+  var PDASH = ['', '6 3', '2 3', '10 3 2 3', '4 4'];
+  function pip(x, y, p) { var a = false; for (var i = 0, j = p.length - 1; i < p.length; j = i++) {
+    var xi = p[i][0], yi = p[i][1], xj = p[j][0], yj = p[j][1];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) a = !a; } return a; }
+  var N = 50, cs = 360 / N;
+  var kja = document.getElementById('kja'), k = '';
+  for (var r = 0; r < 3; r++) for (var c = 0; c < 4; c++)
+    k += '<rect x="' + (250 + c*18) + '" y="' + (40 + r*17) + '" width="14" height="12" fill="#cdd2d6" stroke="#8d949b" stroke-width="0.6"/>';
+  kja.innerHTML = k;
+  var draw = document.getElementById('draw'), grid = document.getElementById('grid'), gl = document.getElementById('gl');
+  var gd = ''; for (var i = 1; i < N; i++) gd += 'M' + (i*cs) + ' 0V360M0 ' + (i*cs) + 'H360';
+  var timers = [];
+  function clr() { timers.forEach(clearTimeout); timers = []; draw.innerHTML = ''; grid.innerHTML = ''; gl.setAttribute('d', ''); }
+  function pts(p) { return p.map(function (q) { return q[0].toFixed(1) + ',' + q[1].toFixed(1); }).join(' '); }
+  function poly(p, stroke, o) { o = o || {}; var el = document.createElementNS(NS, 'polygon');
+    el.setAttribute('points', pts(p)); el.setAttribute('fill', o.fill || 'none'); el.setAttribute('fill-opacity', o.fo || 0);
+    el.setAttribute('stroke', stroke); el.setAttribute('stroke-width', o.w || 1.6); el.setAttribute('stroke-linejoin', 'round');
+    if (o.dash) el.setAttribute('stroke-dasharray', o.dash); draw.appendChild(el); return el; }
+  function dot(q, f) { var e = document.createElementNS(NS, 'circle'); e.setAttribute('cx', q[0]); e.setAttribute('cy', q[1]);
+    e.setAttribute('r', 2.6); e.setAttribute('fill', f); draw.appendChild(e); }
+  function anim(p, col, cb) { var pl = document.createElementNS(NS, 'polyline'); pl.setAttribute('fill', 'none');
+    pl.setAttribute('stroke', col); pl.setAttribute('stroke-width', 1.8); draw.appendChild(pl);
+    var acc = [], seq = p.concat([p[0]]);
+    seq.forEach(function (q, i) { timers.push(setTimeout(function () {
+      acc.push(q); pl.setAttribute('points', pts(acc)); if (i < p.length) dot(q, col);
+      if (i === p.length) { pl.remove(); poly(p, col, {fill: col, fo: .2}); if (cb) cb(); }
+    }, rm ? 0 : i * 240)); }); }
+  function cells(fn) { var s = ''; for (var i = 0; i < N; i++) for (var j = 0; j < N; j++) {
+    var v = fn((i + .5) * cs, (j + .5) * cs);
+    if (v) s += '<rect x="' + (i*cs).toFixed(1) + '" y="' + (j*cs).toFixed(1) + '" width="' + cs.toFixed(1) + '" height="' + cs.toFixed(1) + '" fill="' + v[0] + '" fill-opacity="' + v[1] + '"/>';
+  } grid.innerHTML = s; gl.setAttribute('d', gd); }
+  function sw(c, t, st) { return '<span><span class="sw" style="' + (st || 'background:' + c) + '"></span>' + t + '</span>'; }
+  var BL = '#85B7EB', EG = '#E86FB0', KJ = '#F4F6F8';
+
+  var steps = [
+    {t: 'Buka citra tanggal yang ditentukan',
+     c: 'Koordinator membukakan filemu. Kotak kuning adalah petak 1 × 1 km. Di citra false color, air tampak gelap, sedangkan eceng gondok dan tumbuhan darat sama-sama merah. Yang membedakan adalah letak dan bentuknya.',
+     l: sw('#1b2a44','Air') + sw('#e0566a','Eceng gondok') + sw('#8f3b4a','Daratan bervegetasi') + sw('#cdd2d6','Blok KJA'),
+     f: function () {}},
+    {t: 'Gambar lapisan air',
+     c: 'Buat lapisan <code>air_A_T1</code>, lalu klik titik demi titik mengikuti garis tepi air. Poligon ini mencakup seluruh permukaan waduk, termasuk bagian yang tertutup eceng gondok dan keramba.',
+     l: sw(BL, 'Poligon air'), f: function () { anim(W, BL); }},
+    {t: 'Gambar lapisan eceng gondok',
+     c: 'Buat lapisan <code>eg_A_T1</code> dan gambar hamparan yang dikelilingi air. Tumbuhan merah yang menyambung ke daratan tidak digambar. Bila ragu, bandingkan dengan citra tanggal lain: eceng gondok bergeser, rumput tetap.',
+     l: sw(BL, 'Air') + sw(EG, 'Eceng gondok'),
+     f: function () { poly(W, BL, {fill: BL, fo: .18}); anim(E, EG); }},
+    {t: 'Gambar lapisan KJA',
+     c: 'Buat lapisan <code>kja_A_T1</code> dan gambar batas luar blok keramba. Lorong air yang lebih sempit dari 20 m ikut masuk blok. Bila eceng gondok menempel di keramba, gambar keduanya; skrip menghitung tumpang tindihnya sebagai KJA.',
+     l: sw(BL, 'Air') + sw(EG, 'Eceng gondok') + sw(KJ, 'KJA', 'background:#F4F6F8;border:1px solid #8d949b'),
+     f: function () { poly(W, BL, {fill: BL, fo: .18}); poly(E, EG, {fill: EG, fo: .2}); anim(K, KJ); }},
+    {t: 'Run lagi: skrip membuat piksel 20 m',
+     c: 'Penilai tidak mewarnai piksel. Skrip mengubah poligon menjadi piksel 20 m: piksel masuk bila titik tengahnya di dalam poligon. Biru adalah air terbuka (r_air); semua yang berwarna adalah permukaan waduk (r_waduk).',
+     l: sw('#378ADD','r_air') + sw(EG,'r_eg') + sw(KJ,'r_kja','background:#F4F6F8;border:1px solid #8d949b'),
+     f: function () { cells(function (x, y) { if (!pip(x, y, W)) return null;
+       if (pip(x, y, K)) return ['#F4F6F8', .85]; if (pip(x, y, E)) return [EG, .8]; return ['#378ADD', .5]; }); poly(W, BL, {w: 1}); }},
+    {t: 'Lima penilai, sesi terpisah',
+     c: 'Kelima penilai menggambar petak yang sama di file masing-masing, bergiliran di laptop yang sama, tanpa saling melihat. Garis mereka hampir sama dan berbeda terutama di tepi air.',
+     l: [0,1,2,3,4].map(function (i) { return sw('', 'p' + (i + 1), 'border:2px ' + (PDASH[i] ? 'dashed ' : 'solid ') + PCOL[i]); }).join(''),
+     f: function () { P.forEach(function (p, i) { poly(p, PCOL[i], {w: 1.6, dash: PDASH[i]}); }); }},
+    {t: 'Voting 3 dari 5 oleh skrip',
+     c: 'Setelah semua sesi selesai, skrip 06c menggabungkan kelima gambar. Piksel masuk permukaan waduk bila dipilih minimal 3 dari 5 penilai. Piksel yang diperdebatkan diberi tanda, dan akurasi juga dilaporkan tanpa piksel itu.',
+     l: sw('#1D9E75','5–0 sepakat penuh') + sw('#FAC775','4–1 cukup yakin') + sw('#E66101','3–2 zona ragu'),
+     f: function () { var n = {5: 0, 4: 0, 3: 0};
+       cells(function (x, y) { var v = P.filter(function (p) { return pip(x, y, p); }).length;
+         if (v === 0) return null; var a = Math.max(v, 5 - v); n[a]++;
+         if (v < 3) return ['#E66101', a === 3 ? .9 : .5];
+         return a === 5 ? ['#1D9E75', .55] : (a === 4 ? ['#FAC775', .9] : ['#E66101', .95]); });
+       var tot = n[5] + n[4] + n[3], st = document.getElementById('stats');
+       st.innerHTML = [[5, 'sepakat penuh'], [4, 'cukup yakin'], [3, 'zona ragu']].map(function (z) {
+         return '<div class="stat"><b>' + Math.round(100 * n[z[0]] / tot) + '%</b><small>' + z[1] + '</small></div>'; }).join('');
+       st.hidden = false; }}
+  ];
+
+  var cur = 0, dots = document.getElementById('dots');
+  steps.forEach(function () { var d = document.createElement('span'); d.className = 'dot'; dots.appendChild(d); });
+  function render() {
+    clr(); var s = steps[cur];
+    document.getElementById('stats').hidden = true;
+    document.getElementById('stepno').textContent = 'Langkah ' + (cur + 1) + ' dari ' + steps.length;
+    document.getElementById('steptitle').textContent = s.t;
+    document.getElementById('cap').innerHTML = s.c;
+    document.getElementById('leg').innerHTML = s.l;
+    Array.prototype.forEach.call(dots.children, function (d, i) { d.className = 'dot' + (i === cur ? ' on' : ''); });
+    document.getElementById('next').textContent = cur === steps.length - 1 ? 'Ulangi dari awal' : 'Berikutnya';
+    s.f();
+  }
+  document.getElementById('next').onclick = function () { cur = (cur + 1) % steps.length; render(); };
+  document.getElementById('prev').onclick = function () { cur = (cur - 1 + steps.length) % steps.length; render(); };
+  document.getElementById('replay').onclick = render;
+  render();
+
+  var Q = [
+    {q: 'Sebagian permukaan waduk tertutup hamparan eceng gondok. Bagaimana menggambarnya?',
+     o: ['Bagian itu tidak digambar sama sekali', 'Masuk poligon air, lalu hamparannya digambar lagi di lapisan eg', 'Hanya digambar di lapisan eg'],
+     a: 1, e: 'Lapisan air mencakup seluruh permukaan waduk, termasuk yang tertutup. Lapisan eg digambar di atasnya, sehingga skrip bisa memisahkan air terbuka dan permukaan waduk.'},
+    {q: 'Ada hamparan merah yang menyambung ke daratan dan bentuknya sama persis di T1 dan T2. Itu apa?',
+     o: ['Eceng gondok, gambar di lapisan eg', 'Tumbuhan darat, tidak digambar', 'KJA, gambar di lapisan kja'],
+     a: 1, e: 'Eceng gondok mengapung dan bergeser antartanggal. Tumbuhan yang menyambung ke darat dan diam di tempat adalah daratan.'},
+    {q: 'Hamparan eceng gondok menempel dan menutupi sebagian blok keramba.',
+     o: ['Gambar keduanya sesuai yang terlihat', 'Gambar eceng gondoknya saja', 'Lewati area itu'],
+     a: 0, e: 'Gambar eceng gondok dan KJA apa adanya. Skrip menghitung bagian yang tumpang tindih sebagai KJA, karena keramba adalah struktur tetap.'},
+    {q: 'Di antara deretan keramba ada lorong air selebar sekitar 10 m.',
+     o: ['Ikut masuk blok KJA', 'Dibiarkan sebagai air'],
+     a: 0, e: 'Unit terkecil yang dinilai adalah piksel 20 m. Lorong yang lebih sempit dari 20 m ikut masuk blok; yang lebih lebar dibiarkan sebagai air.'},
+    {q: 'Poligon air yang kamu gambar sedikit melewati kotak kuning petak.',
+     o: ['Harus dirapikan tepat di garis kuning', 'Boleh, skrip memotongnya otomatis'],
+     a: 1, e: 'Skrip memotong semua lapisan ke batas petak. Tidak perlu menggambar tepat di garis kuning.'},
+    {q: 'Kamu ragu di satu bagian tepi, dan penilai lain sedang duduk di dekatmu.',
+     o: ['Tanyakan pendapatnya', 'Pilih kelas yang paling mungkin dan catat keyakinan 1', 'Biarkan bagian itu kosong'],
+     a: 1, e: 'Penilai bekerja tanpa diskusi agar kesepakatan antarpenilai terukur. Keraguanmu tidak hilang: voting dan zona ragu yang akan menanganinya.'}
+  ];
+  var quiz = document.getElementById('quiz'), jawab = {};
+  function skor() { var b = 0; Object.keys(jawab).forEach(function (i) { if (jawab[i] === Q[i].a) b++; });
+    document.getElementById('skor').textContent = b + ' dari ' + Q.length; }
+  function buildQuiz() {
+    quiz.innerHTML = ''; jawab = {};
+    Q.forEach(function (item, qi) {
+      var box = document.createElement('div'); box.className = 'q';
+      box.innerHTML = '<span class="qn">Pertanyaan ' + (qi + 1) + '</span><h3>' + item.q + '</h3><div class="opts"></div><p class="fb" hidden></p>';
+      var opts = box.querySelector('.opts'), fb = box.querySelector('.fb');
+      item.o.forEach(function (teks, oi) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.id = 'q' + qi + 'o' + oi; b.textContent = teks;
+        b.onclick = function () {
+          if (jawab.hasOwnProperty(qi)) return;
+          jawab[qi] = oi;
+          Array.prototype.forEach.call(opts.children, function (x, xi) {
+            if (xi === item.a) x.classList.add('right'); else if (xi === oi) x.classList.add('wrong'); });
+          var benar = oi === item.a;
+          fb.className = 'fb ' + (benar ? 'ok' : 'no');
+          fb.innerHTML = '<span class="tag">' + (benar ? 'Tepat. ' : 'Belum tepat. ') + '</span>' + item.e;
+          fb.hidden = false; skor();
+        };
+        opts.appendChild(b);
+      });
+      quiz.appendChild(box);
+    });
+    skor();
+  }
+  document.getElementById('ulang').onclick = buildQuiz;
+  buildQuiz();
+})();
+</script>
+</body>
+</html>
