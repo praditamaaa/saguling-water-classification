@@ -33,13 +33,13 @@
 // ---------------------------------------------------------------------
 var ASSET = 'projects/earth-engine-511102/assets/';
 var VERSI_PETAK = 'v1';   // versi Asset yang DITULIS langkah ini; naikkan bila diulang
-var T1 = '';    // format 'YYYY-MM-DD'
-var T2 = '';    // format 'YYYY-MM-DD'
+var T1 = '2025-08-26';    // format 'YYYY-MM-DD'
+var T2 = '2024-08-01';    // format 'YYYY-MM-DD'
 
 var PETAK = [
-  {id: 'A', zona: 'Air terbuka dan tepian', pusat: null},   // [bujur, lintang]
-  {id: 'B', zona: 'Eceng gondok',           pusat: null},
-  {id: 'C', zona: 'KJA',                    pusat: null}
+  {id: 'A', zona: 'Air terbuka dan tepian', pusat: [107.39078,-6.91341]},   // [bujur, lintang]
+  {id: 'B', zona: 'Eceng gondok',           pusat: [107.43641, -6.97519]},
+  {id: 'C', zona: 'KJA',                    pusat: [107.43676,-6.95798]}
 ];
 var SISI_M = 1000;
 var CRS = 'EPSG:32748';

@@ -2,6 +2,27 @@
 
 Perubahan metode dan skrip, terbaru di atas. Setiap entri menyebut alasannya.
 
+## 2026-11-20
+
+- **Digitasi ulang v2** setelah kalibrasi ulang dengan kunci interpretasi citra resolusi tinggi di area latihan. Alasan: kesepakatan v1 rendah untuk eceng gondok dan KJA (κ r_eg B_T1 = 0,21; IoU r_kja antarpenilai 0,31–0,43), sedangkan judul menjanjikan peta objek apung.
+  - `06b_digitasi_p1_v2` … `p5_v2` (baru): file baru agar gambar v1 tidak menjadi patokan; basemap satelit dimatikan; 12 kombinasi per penilai (A–C × T1, T2, T3; D–D1, E–D2, F–D3).
+  - Asset v1 tetap disimpan untuk membandingkan kesepakatan sebelum dan sesudah kalibrasi.
+- **Data latih diperluas**: petak D (eceng gondok) pada D1, E (KJA) pada D2, F (eceng gondok) pada D3, digitasi lima penilai. Alasan: data latih semula hanya 3 lokasi dan 2 tanggal (keduanya Agustus); voting v1 menunjukkan eceng gondok (34,9 ha latih) dan KJA (45,4 ha) seimbang tetapi masing-masing dari satu kawasan, dan eceng gondok paling berubah antartanggal. Satu tanggal per petak tambahan memberi lebih banyak kondisi waktu daripada dua tanggal untuk ketiganya, dengan biaya lebih kecil (12 vs 15 kombinasi). 05b memeriksa syarat petak (≥ 1 km dari A–C, ≥ 50% di dalam waduk, tidak tumpang tindih) dan vegetasi apung ≥ 5 ha di D dan F.
+- **T3 sebelum Oktober 2025**: tanggal uji tidak harus sesudah T1. Alasan: data uji tanpa PLTS terapung agar kelasnya sama dengan data latih. T1, T2, T3, D1, D2, D3 saling berjarak ≥ 60 hari.
+- `05b_memilih_tanggal_dan_petak_tambahan.js` menggantikan `05b_memilih_tanggal_uji_T3.js`. Versi lama memicu "Too many concurrent aggregations" karena menghitung `reduceRegion` per petak di dalam `map` per tanggal. Kini satu `reduceRegion` per tanggal (semua petak dalam satu citra berlabel), Console dibatasi pada `TAHUN_TAMPIL`, dan tabel lengkap diekspor ke CSV.
+- Pencegahan galat yang sama di skrip lain:
+  - `06c`: semua tanggal dan ukuran satu petak dihitung dalam satu `reduceRegion` (6 agregasi, bukan 2 per kombinasi); hasil kappa dan IoU tidak berubah. Kombinasi diatur lewat `PETAK_KODE`.
+  - `07`: ambang otomatis dicetak per tanggal.
+  - `08`: Console hanya menampilkan petak B tanggal T1; tabel lengkap tetap di CSV.
+  - `10`: jumlah piksel per kelas memakai satu `frequencyHistogram` per tanggal.
+- `08`: bawaan `VERSI_REF = 'vote_v2'`. `09`: tabel bias tim hanya memakai petak A–C pada T1, T2.
+- **Naskah 2 (machine learning)**:
+  - `10_membuat_dataset_ml.js` (baru): 22 fitur PCD per piksel dan label voting; CSV per tanggal (T1, T2, T3 untuk A–C; D1, D2, D3 untuk D, E, F); peta ilustrasi opsional untuk tanggal terbaru dengan PLTS dimasker.
+  - `ml/11_pelatihan_model.ipynb` (baru): model terbaik dipilih dari skor validasi silang (bukan skor T3); tabel selisih validasi vs uji untuk mendeteksi *overfitting*; 5 model × 4 set fitur, GroupKFold per blok, McNemar + Holm, bootstrap per blok, kepentingan fitur, uji silang tanggal, E5 dengan/tanpa petak tambahan, peta dan luas seluruh waduk. Berjalan di Kaggle dan Colab; diuji dengan data tiruan.
+  - `docs/metodologi-ml.md` (baru): rancangan eksperimen yang dikunci sebelum data uji dilihat; bagian 10 berisi dasar setiap keputusan (rujukan terverifikasi, data penelitian, atau keputusan tim) dan daftar pustakanya.
+  - Notebook: ukuran blok validasi silang ditentukan dari jangkauan autokorelasi label (diperbesar otomatis bila perlu) dan diperiksa lagi dengan autokorelasi residu (Roberts dkk., 2017); bias proporsi kelas di T3 dilaporkan (Millard & Richardson, 2015).
+  - `tools/buat_06b_v2.py`: pembuat lima file 06b v2 dari satu templat.
+
 ## 2026-11-09
 
 - Repository dibuat. Skrip GEE dipindah ke `gee/`, skrip Python ke `python/`, dokumen ke `docs/`.

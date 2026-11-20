@@ -4,7 +4,7 @@ Tugas besar mata kuliah Pengolahan Citra Digital (PCD), D4 Teknik Informatika, P
 
 Penelitian ini menguji seberapa andal metode segmentasi air yang sudah terbit (indeks NDWI dan MNDWI dengan ambang tetap, Otsu, dan Canny–Otsu, ditambah morfologi) ketika permukaan waduk tertutup eceng gondok dan keramba jaring apung (KJA). Data: citra Sentinel-2 di Google Earth Engine (GEE).
 
-**Tim:** Muhammad Nabil Syauqi Rasyiq - 241524018, Praditama Ajmal Hasan - 241524023  · **Status:** protokol data referensi selesai; berikutnya sesi kalibrasi dan digitasi lima penilai.
+**Tim:** Muhammad Nabil Syauqi Rasyiq – 241524018, Praditama Ajmal Hasan – 241524023
 
 ## Latar belakang singkat
 
@@ -42,15 +42,24 @@ flowchart LR
   E --> G["08<br/>Evaluasi<br/>akurasi"]
   F --> G
   G --> H["09<br/>Tabel hasil<br/>naskah"]
+  B --> T["05b<br/>T3, D1–D3<br/>petak D–F"]
+  T --> D
+  G --> J["10<br/>Dataset ML<br/>(fitur PCD)"]
+  E --> J
+  J --> K["11<br/>Pelatihan 5 model<br/>Kaggle / Colab"]
 ```
 
 Anggota tim menggambar referensi (06b) sebelum Langkah 07 dijalankan, agar referensi tidak terpengaruh hasil segmentasi.
 
+Langkah 05b, 10, dan 11 untuk pengujian machine learning: model dilatih pada petak A–C (T1, T2) dan petak tambahan D, E, F (masing-masing pada D1, D2, D3), lalu diuji pada petak A–C tanggal T3. Rancangan eksperimennya dikunci di [docs/metodologi-ml.md](docs/metodologi-ml.md).
+
 ## Struktur repository
 
 ```
-gee/        skrip Earth Engine 01–08; 00_BACA_DULU.txt berisi urutan, versi Asset, dan panduan galat
+gee/        skrip Earth Engine 01–10; 00_BACA_DULU.txt berisi urutan, versi Asset, dan panduan galat
 python/     09_membuat_tabel_hasil.py (hanya pustaka standar Python 3.8+)
+ml/         11_pelatihan_model.ipynb (Kaggle/Colab) dan buat_notebook.py (sumber notebook)
+tools/      buat_06b_v2.py (membuat lima file digitasi 06b v2 dari satu templat)
 docs/       panduan penilai, referensi, laporan progres, materi kalibrasi, Excel pemetaan skrip
 data/       CSV kecil hasil ekspor GEE
 hasil/      tabel_hasil.md dan gambar untuk naskah
@@ -71,15 +80,13 @@ python python/09_membuat_tabel_hasil.py data/08_evaluasi_vote_v1_v1.csv data/07_
 
 Hasilnya `tabel_hasil.md`; pindahkan ke `hasil/`.
 
+5. Machine learning: jalankan `gee/10_membuat_dataset_ml.js` (mode `periksa`, lalu `ekspor`, lalu `ekspor_waduk`), kemudian buka `ml/11_pelatihan_model.ipynb`:
+   - **Kaggle**: *New Notebook* → *File* → *Import Notebook*, unggah CSV `dataset_*` dan `waduk_*` sebagai Dataset (*Add Input*), lalu *Run All*.
+   - **Colab**: *File* → *Upload notebook*, lalu *Run all*; notebook membaca CSV dari Drive folder `PCD_Saguling`.
+   Hasil tersimpan di `hasil_ml/`. Notebook diubah lewat `ml/buat_notebook.py`, lalu `python ml/buat_notebook.py`.
+
 Skrip GEE di repository ini adalah sumber utama. Ubah di sini dulu, commit, lalu tempel ke GEE, supaya versi di GEE dan di laporan tidak berbeda.
 
 ## Privasi
 
 Penilai ditulis dengan kode p1–p5 saja. Nama penilai dan lembar catatan bernama disimpan di luar repository.
-
-## Laporan progres
-
-| Tanggal | Laporan | Tag |
-| --- | --- | --- |
-| 23 Oktober 2026 | [Progres 1: penentuan titik uji A, B, C](docs/laporan/2026-10-23-progres-1.md) | `progres-1` |
-| 9 November 2026 | [Progres 2: protokol data referensi lima penilai](docs/laporan/2026-11-09-progres-2.md) | `progres-2` |

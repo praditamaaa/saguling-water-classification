@@ -4,10 +4,11 @@
 // Tujuan   : Menggabungkan referensi lima penilai menjadi satu referensi
 //            per petak x tanggal dengan voting mayoritas (minimal 3 dari 5),
 //            lalu mengukur seberapa sepakat para penilai.
-// Masukan  : 30 Asset saguling_ref_<petak>_<T>_<pN>_<versi> dari Langkah 06b
-//            (5 penilai x 3 petak x 2 tanggal), masing-masing 4 band:
+// Masukan  : Asset saguling_ref_<petak>_<T>_<pN>_<versi> dari Langkah 06b,
+//            untuk setiap kombinasi di PETAK_KODE x 5 penilai
+//            (12 kombinasi x 5 = 60 Asset pada v2), masing-masing 4 band:
 //            r_air, r_waduk, r_eg, r_kja.
-// Keluaran : - 6 Asset saguling_ref_<petak>_<T>_vote_<versi>, berisi:
+// Keluaran : - 1 Asset per kombinasi saguling_ref_<petak>_<T>_vote_<versi>:
 //                r_air, r_waduk, r_eg, r_kja   hasil voting (0/1)
 //                sepakat_r_air ... sepakat_r_kja
 //                    jumlah penilai di pihak mayoritas:
@@ -16,7 +17,7 @@
 //              piksel per tingkat kesepakatan, per petak x tanggal x band.
 //            - CSV 06c_iou_pasangan_<versi> : IoU 10 pasangan penilai.
 //            - Console: silsilah versi, kesetaraan penilai, uji bias tim.
-// Dipakai  : Langkah 08 dengan VERSI_REF = 'vote_v1'.
+// Dipakai  : Langkah 08 (VERSI_REF = 'vote_v2') dan Langkah 10 (dataset ML).
 //
 // CATATAN
 //   - Voting dilakukan terpisah per band. Di tiap penilai r_air selalu di
@@ -30,6 +31,10 @@
 //   - Dengan dua anggota tim, kelompok "tim-tim" hanya berisi satu
 //     pasangan (p1-p2) per petak x tanggal x band.
 //   - Langkah ini membuat Asset baru. Bila diulang, naikkan VERSI_VOTE.
+//   - Agar tidak memicu "Too many concurrent aggregations", semua tanggal
+//     dan semua ukuran satu petak dihitung dalam SATU reduceRegion
+//     (6 agregasi untuk 6 petak). Kappa, persentase kesepakatan, dan IoU
+//     diturunkan dari jumlah-jumlah tersebut.
 // =====================================================================
 
 
@@ -37,12 +42,20 @@
 // 0. PARAMETER
 // ---------------------------------------------------------------------
 var ASSET = 'projects/earth-engine-511102/assets/';
-var VERSI_PETAK   = 'v1';   // dari Langkah 05
-var VERSI_PENILAI = 'v1';   // akhiran Asset penilai: saguling_ref_A_T1_p1_<v>
-var VERSI_VOTE    = 'v1';   // Asset yang DITULIS: saguling_ref_A_T1_vote_<v>
+var VERSI_PETAK    = 'v1';   // dari Langkah 05
+var VERSI_TAMBAHAN = 'v1';   // dari Langkah 05b (petak D, E, F)
+var VERSI_PENILAI  = 'v2';   // akhiran Asset penilai: saguling_ref_A_T1_p1_<v>
+var VERSI_VOTE     = 'v2';   // Asset yang DITULIS: saguling_ref_A_T1_vote_<v>
 
 var PENILAI = ['p1', 'p2', 'p3', 'p4', 'p5'];
 var TIM     = ['p1', 'p2'];  // anggota tim; sisanya penilai luar tim
+
+// Kombinasi yang di-voting. Hapus yang belum selesai digambar, misalnya
+// jalankan dulu hanya {A: ['T1','T2'], B: ['T1','T2'], C: ['T1','T2']}.
+var PETAK_KODE = {
+  A: ['T1', 'T2', 'T3'], B: ['T1', 'T2', 'T3'], C: ['T1', 'T2', 'T3'],
+  D: ['D1'], E: ['D2'], F: ['D3']
+};
 
 // Peta yang ditampilkan di layar.
 var TAMPIL = {petak: 'B', kode: 'T1', band: 'r_waduk'};
@@ -50,8 +63,6 @@ var TAMPIL = {petak: 'B', kode: 'T1', band: 'r_waduk'};
 var CRS = 'EPSG:32748';
 var GRID = [20, 0, 0, 0, -20, 0];
 var BAND = ['r_air', 'r_waduk', 'r_eg', 'r_kja'];
-var PETAK = ['A', 'B', 'C'];
-var KODE = ['T1', 'T2'];
 var N = PENILAI.length;
 var AMBANG = Math.floor(N / 2) + 1;   // 3 dari 5
 
@@ -59,9 +70,31 @@ var AMBANG = Math.floor(N / 2) + 1;   // 3 dari 5
 // ---------------------------------------------------------------------
 // 1. DATA DAN PEMERIKSAAN AWAL
 // ---------------------------------------------------------------------
-var petakFC = ee.FeatureCollection(ASSET + 'saguling_petak_' + VERSI_PETAK);
+var petakUtama = ee.FeatureCollection(ASSET + 'saguling_petak_' + VERSI_PETAK);
+var PETAK = Object.keys(PETAK_KODE);
+var perluTambahan = PETAK.some(function (id) { return ['D', 'E', 'F'].indexOf(id) >= 0; }) ||
+  PETAK.some(function (id) { return PETAK_KODE[id].indexOf('T3') >= 0; });
+var tambahan = ee.FeatureCollection([]);
+if (perluTambahan) {
+  var idTambahan = ASSET + 'saguling_tambahan_' + VERSI_TAMBAHAN;
+  var adaTambahan = false;
+  try { adaTambahan = ee.data.getAsset(idTambahan) !== null; } catch (e) { adaTambahan = false; }
+  if (!adaTambahan) throw new Error('Asset ' + idTambahan + ' belum ada. Jalankan Langkah 05b, ' +
+    'atau keluarkan T3 dan petak D–F dari PETAK_KODE.');
+  tambahan = ee.FeatureCollection(idTambahan);
+}
+function utama(id) { return ['A', 'B', 'C'].indexOf(id) >= 0; }
 function geomPetak(id) {
-  return petakFC.filter(ee.Filter.eq('id', id)).geometry();
+  var fc = utama(id) ? petakUtama : tambahan.filter(ee.Filter.eq('jenis', 'petak'));
+  return fc.filter(ee.Filter.eq('id', id)).geometry();
+}
+function silsilahPetak(id) {
+  return utama(id) ? VERSI_PETAK : 'tambahan_' + VERSI_TAMBAHAN;
+}
+function tanggal(kode) {
+  if (kode === 'T1' || kode === 'T2') return ee.String(petakUtama.first().get(kode.toLowerCase()));
+  return ee.String(ee.Feature(tambahan.filter(ee.Filter.eq('jenis', 'tanggal')).first())
+    .get(kode.toLowerCase()));
 }
 function pathPenilai(kunci, p) {
   return ASSET + 'saguling_ref_' + kunci + '_' + p + '_' + VERSI_PENILAI;
@@ -69,7 +102,7 @@ function pathPenilai(kunci, p) {
 
 var KUNCI = [];
 PETAK.forEach(function (id) {
-  KODE.forEach(function (kode) { KUNCI.push(id + '_' + kode); });
+  PETAK_KODE[id].forEach(function (kode) { KUNCI.push(id + '_' + kode); });
 });
 
 // Hentikan skrip bila ada Asset penilai yang belum diekspor.
@@ -84,10 +117,10 @@ KUNCI.forEach(function (k) {
 if (hilang.length > 0) {
   print('Asset penilai yang belum ada:', hilang);
   throw new Error('Masih ada ' + hilang.length + ' dari ' + (KUNCI.length * N) +
-    ' Asset penilai yang belum ada. Lihat daftar di Console.');
+    ' Asset penilai yang belum ada. Lihat daftar di Console, atau kurangi PETAK_KODE.');
 }
 
-// Silsilah: semua referensi penilai harus digambar di petak versi yang sama.
+// Silsilah: hanya membaca properti Asset (tanpa agregasi piksel).
 var silsilah = [];
 KUNCI.forEach(function (k) {
   PENILAI.forEach(function (p) {
@@ -95,11 +128,11 @@ KUNCI.forEach(function (k) {
     silsilah.push(ee.Feature(null, {
       referensi: k + '_' + p,
       versi_petak_saat_digambar: v,
-      cocok: ee.Algorithms.If(ee.Algorithms.IsEqual(v, VERSI_PETAK), 'Ya', 'TIDAK')
+      cocok: ee.Algorithms.If(ee.Algorithms.IsEqual(v, silsilahPetak(k.slice(0, 1))), 'Ya', 'TIDAK')
     }));
   });
 });
-print('Silsilah 30 referensi penilai vs petak ' + VERSI_PETAK + ' (semua harus "Ya"):',
+print('Silsilah ' + (KUNCI.length * N) + ' referensi penilai (semua harus "Ya"):',
   ui.Chart.feature.byFeature(ee.FeatureCollection(silsilah), 'referensi',
     ['versi_petak_saat_digambar', 'cocok']).setChartType('Table'));
 
@@ -127,9 +160,10 @@ function gabung(kunci) {
 KUNCI.forEach(function (k) {
   var r = gabung(k);
   var hasil = r.vote.addBands(r.sepakat).toByte().clip(r.g).set({
-    versi_petak: VERSI_PETAK,
+    versi_petak: silsilahPetak(k.slice(0, 1)),
     versi_ref: 'vote_' + VERSI_VOTE,
     versi_penilai: VERSI_PENILAI,
+    tanggal: tanggal(k.slice(2)),
     penilai: PENILAI.join(','),
     tim: TIM.join(','),
     jumlah_penilai: N,
@@ -147,106 +181,102 @@ KUNCI.forEach(function (k) {
 
 
 // ---------------------------------------------------------------------
-// 3. FLEISS' KAPPA DAN TINGKAT KESEPAKATAN
-//    Untuk dua kelas (0/1) dan N penilai, per piksel i:
+// 3. BAND UKURAN PER KOMBINASI
+//    Fleiss' kappa (dua kelas, N penilai), per piksel i:
 //      P_i = [s(s-1) + (N-s)(N-s-1)] / [N(N-1)]
 //    P_bar = rata-rata P_i;  p = rata-rata s / N;  P_e = p^2 + (1-p)^2
 //    kappa = (P_bar - P_e) / (1 - P_e)      [Fleiss, 1971]
 //    kappa = -1 bila tidak terdefinisi (semua penilai menjawab 0 di
 //    seluruh petak, misalnya KJA di petak A).
+//    IoU pasangan = |A dan B| / |A atau B|; -1 bila keduanya kosong.
+//    Semua ukuran dinyatakan sebagai JUMLAH, sehingga satu reduceRegion
+//    per petak cukup; rata-rata = jumlah / n.
 // ---------------------------------------------------------------------
 var TINGKAT = [];
 for (var t = AMBANG; t <= N; t++) TINGKAT.push(t);
+var PASANGAN = [];
+for (var i = 0; i < N; i++) for (var j = i + 1; j < N; j++) PASANGAN.push([i, j]);
 
-function kesepakatan(kunci, r) {
-  var band = [];
+function bandUkuran(kunci) {
+  var r = gabung(kunci);
+  var pre = kunci + '__';
+  var band = [ee.Image(1).rename(pre + 'n')];
   BAND.forEach(function (b) {
     var sb = r.s.select(b).toFloat();
     var lawan = sb.multiply(-1).add(N);
-    band.push(sb.rename('s_' + b));
+    band.push(sb.rename(pre + 's_' + b));
     band.push(sb.multiply(sb.subtract(1)).add(lawan.multiply(lawan.subtract(1)))
-      .divide(N * (N - 1)).rename('pi_' + b));
+      .divide(N * (N - 1)).rename(pre + 'pi_' + b));
     TINGKAT.forEach(function (t) {
-      band.push(r.sepakat.select('sepakat_' + b).eq(t).rename('f' + t + '_' + b));
+      band.push(r.sepakat.select('sepakat_' + b).eq(t).rename(pre + 'f' + t + '_' + b));
+    });
+    PASANGAN.forEach(function (ij) {
+      var a = r.imgs[ij[0]].select(b), c = r.imgs[ij[1]].select(b);
+      var key = ij[0] + '_' + ij[1] + '_' + b;
+      band.push(a.and(c).rename(pre + 'i_' + key));
+      band.push(a.or(c).rename(pre + 'u_' + key));
     });
   });
   var v = r.vote;
   band.push(v.select('r_waduk')
     .and(v.select('r_air').or(v.select('r_eg')).or(v.select('r_kja')).not())
-    .rename('tanpa_kelas'));
-  var rata = ee.Image.cat(band).reduceRegion({
-    reducer: ee.Reducer.mean(), geometry: r.g, crs: CRS, crsTransform: GRID, maxPixels: 1e9
-  });
-
-  return BAND.map(function (b) {
-    var p = ee.Number(rata.get('s_' + b)).divide(N);
-    var pe = p.pow(2).add(ee.Number(1).subtract(p).pow(2));
-    var pbar = ee.Number(rata.get('pi_' + b));
-    var sifat = {
-      kunci: kunci, petak: kunci.slice(0, 1), kode: kunci.slice(2), band: b,
-      kappa: ee.Algorithms.If(pe.lt(1), pbar.subtract(pe).divide(ee.Number(1).subtract(pe)), -1),
-      proporsi_ya: p,
-      pct_tanpa_kelas: ee.Number(rata.get('tanpa_kelas')).multiply(100),
-      versi: 'vote_' + VERSI_VOTE
-    };
-    TINGKAT.forEach(function (t) {
-      sifat['pct_sepakat_' + t] = ee.Number(rata.get('f' + t + '_' + b)).multiply(100);
-    });
-    return ee.Feature(null, sifat);
-  });
+    .rename(pre + 'tanpa_kelas'));
+  return ee.Image.cat(band).toFloat();
 }
 
-
-// ---------------------------------------------------------------------
-// 4. IoU ANTARPASANGAN PENILAI
-//    IoU = |A dan B| / |A atau B|;  -1 bila keduanya kosong.
-// ---------------------------------------------------------------------
 function kelompok(pa, pb) {
   var ta = TIM.indexOf(pa) >= 0, tb = TIM.indexOf(pb) >= 0;
   return (ta && tb) ? 'tim-tim' : ((ta || tb) ? 'tim-luar' : 'luar-luar');
 }
 
-function pasangan(kunci, r) {
-  var band = [], info = [];
-  for (var i = 0; i < N; i++) {
-    for (var j = i + 1; j < N; j++) {
-      BAND.forEach(function (b) {
-        var a = r.imgs[i].select(b), c = r.imgs[j].select(b);
-        var key = i + '_' + j + '_' + b;
-        band.push(a.and(c).rename('i_' + key));
-        band.push(a.or(c).rename('u_' + key));
-        info.push({i: i, j: j, b: b, key: key});
-      });
-    }
-  }
-  var jumlah = ee.Image.cat(band).reduceRegion({
-    reducer: ee.Reducer.sum(), geometry: r.g, crs: CRS, crsTransform: GRID, maxPixels: 1e9
+// SATU reduceRegion per petak (semua tanggalnya sekaligus).
+var barisK = [], barisP = [];
+PETAK.forEach(function (id) {
+  var kunciPetak = PETAK_KODE[id].map(function (kode) { return id + '_' + kode; });
+  var jumlah = ee.Image.cat(kunciPetak.map(bandUkuran)).reduceRegion({
+    reducer: ee.Reducer.sum(), geometry: geomPetak(id),
+    crs: CRS, crsTransform: GRID, maxPixels: 1e9, tileScale: 4
   });
-  return info.map(function (o) {
-    var I = ee.Number(jumlah.get('i_' + o.key));
-    var U = ee.Number(jumlah.get('u_' + o.key));
-    return ee.Feature(null, {
-      kunci: kunci, petak: kunci.slice(0, 1), kode: kunci.slice(2), band: o.b,
-      penilai_a: PENILAI[o.i], penilai_b: PENILAI[o.j],
-      kelompok: kelompok(PENILAI[o.i], PENILAI[o.j]),
-      irisan: I, gabungan: U,
-      iou: ee.Algorithms.If(U.gt(0), I.divide(U), -1)
+  kunciPetak.forEach(function (kunci) {
+    var pre = kunci + '__';
+    var n = ee.Number(jumlah.get(pre + 'n'));
+    var rata = function (nama) { return ee.Number(jumlah.get(pre + nama)).divide(n); };
+    BAND.forEach(function (b) {
+      var p = rata('s_' + b).divide(N);
+      var pe = p.pow(2).add(ee.Number(1).subtract(p).pow(2));
+      var pbar = rata('pi_' + b);
+      var sifat = {
+        kunci: kunci, petak: id, kode: kunci.slice(2), band: b,
+        kappa: ee.Algorithms.If(pe.lt(1), pbar.subtract(pe).divide(ee.Number(1).subtract(pe)), -1),
+        proporsi_ya: p,
+        pct_tanpa_kelas: rata('tanpa_kelas').multiply(100),
+        versi: 'vote_' + VERSI_VOTE
+      };
+      TINGKAT.forEach(function (t) {
+        sifat['pct_sepakat_' + t] = rata('f' + t + '_' + b).multiply(100);
+      });
+      barisK.push(ee.Feature(null, sifat));
+      PASANGAN.forEach(function (ij) {
+        var key = ij[0] + '_' + ij[1] + '_' + b;
+        var I = ee.Number(jumlah.get(pre + 'i_' + key));
+        var U = ee.Number(jumlah.get(pre + 'u_' + key));
+        barisP.push(ee.Feature(null, {
+          kunci: kunci, petak: id, kode: kunci.slice(2), band: b,
+          penilai_a: PENILAI[ij[0]], penilai_b: PENILAI[ij[1]],
+          kelompok: kelompok(PENILAI[ij[0]], PENILAI[ij[1]]),
+          irisan: I, gabungan: U,
+          iou: ee.Algorithms.If(U.gt(0), I.divide(U), -1)
+        }));
+      });
     });
   });
-}
-
-var barisK = [], barisP = [];
-KUNCI.forEach(function (k) {
-  var r = gabung(k);
-  barisK = barisK.concat(kesepakatan(k, r));
-  barisP = barisP.concat(pasangan(k, r));
 });
 var fcK = ee.FeatureCollection(barisK);
 var fcP = ee.FeatureCollection(barisP);
 
 
 // ---------------------------------------------------------------------
-// 5. RINGKASAN DI CONSOLE
+// 4. RINGKASAN DI CONSOLE
 // ---------------------------------------------------------------------
 var kolomK = ['kappa'].concat(TINGKAT.slice().reverse().map(function (t) {
   return 'pct_sepakat_' + t;
@@ -272,7 +302,7 @@ var kesetaraan = ee.FeatureCollection(PENILAI.map(function (p) {
   });
   return ee.Feature(null, sifat);
 }));
-print('Kesetaraan penilai: rata-rata IoU terhadap empat penilai lain (semua petak dan tanggal):',
+print('Kesetaraan penilai: rata-rata IoU terhadap empat penilai lain (semua kombinasi):',
   ui.Chart.feature.byFeature(kesetaraan, 'penilai',
     ['status'].concat(BAND.map(function (b) { return 'iou_' + b; }))).setChartType('Table'));
 
@@ -292,7 +322,7 @@ print('Uji bias tim: rata-rata IoU per kelompok pasangan:',
 
 
 // ---------------------------------------------------------------------
-// 6. EKSPOR CSV
+// 5. EKSPOR CSV
 // ---------------------------------------------------------------------
 Export.table.toDrive({
   collection: fcK, description: '06c_kesepakatan_vote_' + VERSI_VOTE,
@@ -308,13 +338,14 @@ Export.table.toDrive({
 
 
 // ---------------------------------------------------------------------
-// 7. PETA KESEPAKATAN
+// 6. PETA KESEPAKATAN
 //    Hanya piksel yang TIDAK disepakati penuh yang diwarnai:
 //    oranye tua = zona ragu (3-2), oranye muda = cukup yakin (4-1).
 // ---------------------------------------------------------------------
 var kT = TAMPIL.petak + '_' + TAMPIL.kode;
+if (KUNCI.indexOf(kT) < 0) throw new Error('TAMPIL ' + kT + ' tidak ada di PETAK_KODE.');
 var rT = gabung(kT);
-var dT = ee.Date(ee.String(petakFC.first().get(TAMPIL.kode.toLowerCase())));
+var dT = ee.Date(tanggal(TAMPIL.kode));
 var citraT = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED').filterBounds(rT.g)
   .filterDate(dT, dT.advance(1, 'day')).mosaic().clip(rT.g);
 var spT = rT.sepakat.select('sepakat_' + TAMPIL.band);

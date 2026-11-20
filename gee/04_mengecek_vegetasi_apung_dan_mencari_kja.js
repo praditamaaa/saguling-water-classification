@@ -34,13 +34,13 @@
 // ---------------------------------------------------------------------
 var ASSET = 'projects/earth-engine-511102/assets/';
 var VERSI_TANGGAL = 'v1';   // versi Asset tanggal penuh yang DIBACA (dari Langkah 02)
-var T1 = '';    // dari Langkah 02, format 'YYYY-MM-DD'
+var T1 = '2025-08-26';    // dari Langkah 02, format 'YYYY-MM-DD'
 
 // Pusat petak [bujur, lintang] dari Langkah 03 (null = belum ada).
 var PETAK = [
-  {id: 'A', pusat: null, warna: 'ffff00'},
-  {id: 'B', pusat: null, warna: 'ff9100'},
-  {id: 'C', pusat: null, warna: 'ffffff'}
+  {id: 'A', pusat: [107.39078,-6.91341], warna: 'ffff00'},
+  {id: 'B', pusat: [107.43641, -6.97519], warna: 'ff9100'},
+  {id: 'C', pusat: [107.43676,-6.95798], warna: 'ffffff'}
 ];
 
 var AOI = ee.Geometry.Rectangle([107.28, -7.02, 107.58, -6.80]);

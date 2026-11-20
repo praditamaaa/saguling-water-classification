@@ -29,14 +29,14 @@
 // ---------------------------------------------------------------------
 // 0. PARAMETER — ISI DARI HASIL LANGKAH SEBELUMNYA
 // ---------------------------------------------------------------------
-var T1 = '';   // format 'YYYY-MM-DD'  (dari Langkah 02)
-var T2 = '';   // format 'YYYY-MM-DD'  (dari Langkah 02)
+var T1 = '2025-08-26';   // format 'YYYY-MM-DD'  (dari Langkah 02)
+var T2 = '2024-08-01';   // format 'YYYY-MM-DD'  (dari Langkah 02)
 
 // Pusat petak [bujur, lintang]. Biarkan null untuk MODE PILIH.
 var PETAK = [
-  {id: 'A', zona: 'Air terbuka dan tepian', pusat: null, warna: 'ffff00'},
-  {id: 'B', zona: 'Eceng gondok',           pusat: null, warna: 'ff9100'},
-  {id: 'C', zona: 'KJA',                    pusat: null, warna: 'ffffff'}
+  {id: 'A', zona: 'Air terbuka dan tepian', pusat: [107.39078,-6.91341], warna: 'ffff00'},
+  {id: 'B', zona: 'Eceng gondok',           pusat: [107.43641, -6.97519], warna: 'ff9100'},
+  {id: 'C', zona: 'KJA',                    pusat: [107.43676,-6.95798], warna: 'ffffff'}
 ];
 
 var AOI = ee.Geometry.Rectangle([107.28, -7.02, 107.58, -6.80]);

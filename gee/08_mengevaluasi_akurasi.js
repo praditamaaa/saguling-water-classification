@@ -50,7 +50,7 @@
 // ---------------------------------------------------------------------
 var ASSET = 'projects/earth-engine-511102/assets/';
 var VERSI_PETAK = 'v1';   // dari Langkah 05
-var VERSI_REF   = 'vote_v1';   // dari Langkah 06c
+var VERSI_REF   = 'vote_v2';   // dari Langkah 06c (v2 = setelah kalibrasi ulang)
 var VERSI_PETA  = 'v1';        // dari Langkah 07
 var N_PENILAI   = 5;
 var CRS = 'EPSG:32748';
@@ -210,10 +210,12 @@ PETAK.forEach(function (id) {
 });
 var hasil = ee.FeatureCollection(semua);   // urutan: petak, tanggal, konfigurasi, referensi, tingkat
 
-print('Contoh 12 baris pertama:', hasil.limit(12));
+// Console hanya menampilkan SATU petak x tanggal (satu reduceRegion), agar
+// tidak memicu "Too many concurrent aggregations". Tabel lengkap: CSV.
+var contoh = ee.FeatureCollection(evaluasi('B', 'T1'));
+print('Contoh 12 baris pertama (B, T1):', contoh.limit(12));
 print('IoU terhadap r_air, petak B, T1, semua piksel:', ui.Chart.feature.byFeature(
-  hasil.filter(ee.Filter.and(ee.Filter.eq('petak', 'B'), ee.Filter.eq('kode', 'T1'),
-    ee.Filter.eq('referensi', 'r_air'), ee.Filter.eq('tingkat', 'semua'))),
+  contoh.filter(ee.Filter.and(ee.Filter.eq('referensi', 'r_air'), ee.Filter.eq('tingkat', 'semua'))),
   'konf', ['iou']).setChartType('ColumnChart'));
 
 Export.table.toDrive({

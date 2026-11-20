@@ -1,7 +1,5 @@
 # Panduan Penilai: Digitasi Data Referensi Waduk Saguling
 
-Diperbarui 9 November 2026. Versi yang bisa diedit bersama ada di dokumen Panduan Penilai tim; berkas ini salinannya untuk repository.
-
 ## 1. Mengapa referensi dibuat dengan cara ini
 
 Data referensi (ground truth) penelitian ini dibuat oleh lima penilai (dua anggota tim dan tiga penilai luar tim) dan ditetapkan dengan voting mayoritas, mengikuti praktik baik penilaian akurasi yang sudah terbit. Kualitasnya diukur dengan angka, bukan diasumsikan.
@@ -248,3 +246,26 @@ Koordinator menggabungkan kelima digitasi lewat voting, mengukur kesepakatannya,
 7. **Uji pembanding (opsional).** Bentuk referensi dengan STAPLE, lalu laporkan persentase piksel yang berbeda dari hasil voting.
 
 Kalimat untuk naskah: *"Referensi ditetapkan dengan voting mayoritas lima penilai (dua anggota tim dan tiga penilai luar tim) yang dikalibrasi pada petak latihan. Kesepakatan antarpenilai sebesar κ = [__], dengan [__]% piksel disepakati penuh."*
+
+## 11. Perubahan untuk digitasi ulang v2 (20 November 2026)
+
+Bagian ini menggantikan aturan sebelumnya bila bertentangan.
+
+**Alasan.** Kesepakatan v1 baik untuk permukaan waduk (κ 0,78–0,92), tetapi rendah untuk pemisahan air, eceng gondok, dan KJA (κ r_eg B_T1 = 0,21; IoU r_kja antarpenilai 0,31–0,43). Penilai juga melaporkan kesulitan memastikan eceng gondok di sekitar KJA.
+
+**Kalibrasi ulang dengan kunci interpretasi**
+1. Koordinator memilih 2–3 area latihan di Saguling, **di luar petak A, B, C**, yang berisi eceng gondok dan KJA.
+2. Untuk area latihan, disiapkan pasangan potongan citra: kiri citra resolusi tinggi bertanggal (misalnya Google Earth Pro, citra historis), kanan Sentinel-2 tanggal yang sama atau dekat. Untuk eceng gondok, selisih tanggal maksimal beberapa hari; untuk KJA boleh beberapa minggu.
+3. Contoh yang wajib ada: air terbuka; eceng gondok rapat; eceng gondok tipis/jarang; blok KJA; KJA dengan eceng gondok di sekitarnya; tepian dan daratan.
+4. Semua penilai berlatih di area latihan, lalu jawabannya dicocokkan dengan citra tajam. Perbedaan tafsiran dibahas sampai sepakat, lalu dituliskan sebagai aturan di bawah.
+5. Catat tanggal sesi, area latihan, dan aturan baru di Excel Tabel 7a.
+
+**Aturan digitasi v2**
+- Gunakan file baru `06b_digitasi_pN_v2.js`. **Jangan membuka file v1** atau peta kesepakatan v1.
+- Gambar **12 kombinasi**: petak A, B, C pada T1, T2, T3; petak D pada D1, E pada D2, F pada D3. Nama lapisan mengikuti pola `air_E_D2`, `eg_E_D2`, `kja_E_D2`.
+- Petak D dan F adalah kawasan eceng gondok; petak E adalah kawasan KJA. Tetap gambar semua objek yang ada, bukan hanya objek sasaran petaknya.
+- Hanya citra Sentinel-2 yang dipakai di petak uji. Basemap satelit resolusi tinggi tidak dinyalakan; peta dasar sudah diatur ke ROADMAP.
+- KJA digambar sebagai **blok kawasan**, bukan per petak keramba.
+- Eceng gondok di dalam blok KJA tidak perlu digambar (dihitung KJA).
+- Eceng gondok tipis: [isi aturan hasil kalibrasi, misalnya digambar bila tampak merah di komposit NIR pada sedikitnya 2 × 2 piksel 10 m yang berdekatan].
+- Anggota tim (p1, p2) menyelesaikan digitasi v2 sebelum Langkah 07 dijalankan.

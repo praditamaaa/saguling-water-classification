@@ -32,15 +32,8 @@ var petakFC = ee.FeatureCollection(ASSET + 'saguling_petak_' + VERSI_PETAK);
 var tgl = ee.Date(ee.String(petakFC.first().get(KODE_TGL)));
 var CRS = 'EPSG:32748';
 var P20 = ee.Projection(CRS).atScale(20);
-
 // Kotak 1 x 1 km di proyeksi UTM, sama ukurannya dengan petak uji.
-// PERBAIKAN: Transformasi titik ke UTM (CRS) terlebih dahulu agar buffer 500 meter 
-// dieksekusi dengan mulus tanpa konflik satuan derajat vs meter.
-var kotak = ee.Geometry.Point(PUSAT)
-  .transform(CRS, 1)
-  .buffer(500)
-  .bounds(1, ee.Projection(CRS));
-  
+var kotak = ee.Geometry.Point(PUSAT).buffer(500, 1, ee.Projection(CRS)).bounds(1, ee.Projection(CRS));
 var konteks = kotak.buffer(300).bounds();
 var m = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
   .filterBounds(kotak).filterDate(tgl, tgl.advance(1, 'day')).mosaic();

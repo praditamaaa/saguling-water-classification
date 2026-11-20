@@ -58,8 +58,8 @@ var MAKS_SELISIH_AIR = 2;              // selisih air terbuka maksimal (poin %)
 var BATAS_AKHIR = '2025-09-30';        // sebelum PLTS terapung mulai dibangun (Okt 2025)
 
 // Isi untuk melihat citra pasangan yang dipilih (boleh dikosongkan).
-var TAMPIL_T1 = '';
-var TAMPIL_T2 = '';
+var TAMPIL_T1 = '2025-08-26';
+var TAMPIL_T2 = '2024-08-01';
 
 
 // ---------------------------------------------------------------------

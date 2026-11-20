@@ -221,13 +221,16 @@ def main(path_eval, path_ambang, path_sepakat=None, path_pasangan=None):
                            f"{fmt(angka(w.get('pct_sepakat_3')), 1)} |")
         out.append("")
     if path_pasangan:
-        out.append("Uji bias tim: rata-rata IoU antarpasangan penilai\n")
+        out.append("Uji bias tim: rata-rata IoU antarpasangan penilai (petak A-C, T1 dan T2)\n")
         out.append("| Kelompok pasangan | r_air | r_waduk | r_eg | r_kja |")
         out.append("| --- | --- | --- | --- | --- |")
         iou = defaultdict(list)
         with open(path_pasangan, newline="", encoding="utf-8") as f:
             for b in csv.DictReader(f):
-                iou[(b["kelompok"], b["band"])].append(angka(b["iou"]))
+                # Naskah 1 hanya memakai petak A-C pada T1 dan T2; baris T3 dan
+                # petak D-F (dataset ML, Langkah 05b) dilewati.
+                if b["petak"] in PETAK and b["kode"] in KODE:
+                    iou[(b["kelompok"], b["band"])].append(angka(b["iou"]))
         for kel in ("tim-tim", "tim-luar", "luar-luar"):
             sel = [fmt(rata(iou[(kel, band)])) for band in ("r_air", "r_waduk", "r_eg", "r_kja")]
             out.append(f"| {kel} | " + " | ".join(sel) + " |")

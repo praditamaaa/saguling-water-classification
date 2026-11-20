@@ -32,7 +32,11 @@ No  File                                          Mengisi dari        Menghasilk
 06a 06a_kalibrasi_p1.js ... p5.js (5 file)        PUSAT latihan       tidak ada Asset; luas latihan di Console
 06b 06b_digitasi_p1.js  ... p5.js (5 file)        versi petak         Asset saguling_ref_<petak>_<T>_<pN>_v1
                                                                       (6 per penilai, 30 seluruhnya)
-06c 06c_voting_lima_penilai.js                    30 Asset 06b        Asset saguling_ref_<petak>_<T>_vote_<v> (6);
+05b 05b_memilih_tanggal_uji_T3.js                 versi petak         T3 (kamu pilih); Asset saguling_tanggal_uji_<v>
+                                                                      (T3 + poligon PLTS) — untuk Naskah 2
+06b 06b_digitasi_p1_v2.js ... p5_v2.js (5 file)   versi petak, uji    Asset saguling_ref_<petak>_<T>_pN_v2
+                                                                      (T1, T2, dan T3) — digitasi ulang
+06c 06c_voting_lima_penilai.js                    Asset 06b           Asset saguling_ref_<petak>_<T>_vote_<v> (6 atau 9);
                                                                       CSV 06c_kesepakatan_vote_<v>,
                                                                       CSV 06c_iou_pasangan_vote_<v>
 07  07_menyegmentasi_12_konfigurasi.js            versi petak         Asset saguling_peta_T1_<v>, saguling_peta_T2_<v>;
@@ -40,10 +44,21 @@ No  File                                          Mengisi dari        Menghasilk
 08  08_mengevaluasi_akurasi.js                    versi petak, ref    CSV 08_evaluasi_<v ref>_<v peta> (432 baris);
                                                   vote, dan peta      PNG Gambar 2; tabel silsilah versi
 09  09_membuat_tabel_hasil.py                     CSV 07, 08, 06c     tabel_hasil.md (Tabel VIII–XIII)
-10  10_pemetaan_skrip_dan_hasil.xlsx             semua langkah        catatan hasil + rumus tabel naskah
+10  10_membuat_dataset_ml.js                     vote v2, konfigurasi CSV dataset_<T>_<v> (T1, T2, T3) dan
+                                                  terbaik (Langkah 08) waduk_<T>_<v> ke Drive/PCD_Saguling
+     MODE 'periksa' -> 'ekspor' -> 'ekspor_waduk'
+11  ml/11_pelatihan_model.ipynb                  CSV Langkah 10       hasil_ml/ (tabel, gambar, model) —
+                                                                      dijalankan di Kaggle atau Colab
+--  10_pemetaan_skrip_dan_hasil.xlsx             semua langkah        catatan hasil + rumus tabel naskah
 
 Mulai Langkah 05, T1/T2 dan koordinat TIDAK perlu disalin lagi:
 langkah 06–08 membacanya dari Asset saguling_petak_<v>.
+
+DIGITASI ULANG v2 (20 November 2026)
+  Setelah kalibrasi ulang dengan kunci interpretasi citra tajam, kelima
+  penilai menggambar ulang di file BARU 06b_digitasi_pN_v2.js (bukan file
+  v1), untuk T1, T2, dan T3 sekaligus. Jalankan 05b lebih dulu agar T3
+  sudah ada. Asset v1 tidak dihapus.
 
 LIMA PENILAI (lihat dokumen Panduan Penilai)
   Langkah 06a dan 06b disediakan lima file, satu per penilai (p1, p2 =
@@ -68,7 +83,9 @@ Ada empat jenis versi, masing-masing ditulis oleh satu langkah:
   VERSI_PETAK     Langkah 05     Langkah 06a, 06b, 06c, 07, 08
   VERSI_REF       Langkah 06b    Langkah 06c (sebagai VERSI_PENILAI)
                   ('pN_v1')
-  VERSI_VOTE      Langkah 06c    Langkah 08 (sebagai VERSI_REF = 'vote_v1')
+  VERSI_VOTE      Langkah 06c    Langkah 08 (sebagai VERSI_REF = 'vote_v2'), 10
+  VERSI_UJI       Langkah 05b    Langkah 06b v2, 10
+  VERSI_DATASET   Langkah 10     notebook 11 (nama CSV)
   VERSI_PETA      Langkah 07     Langkah 07 (periksa), 08
 
 Cara mengulang sebuah langkah:
