@@ -19,7 +19,7 @@ Buat issue berikut di tab Issues, satu per baris. Beri label dan milestone sesua
 | 10 | Ekspor poligon referensi sebagai GeoJSON | referensi | progres-3 | Berkas di `data/` untuk transparansi |
 | 11 | Langkah 07 mode setel dan ekspor | gee | progres-4 | Parameter final di Excel Tabel 8; 2 Asset peta |
 | 12 | Langkah 07 mode periksa | gee | progres-4 | Excel Tabel 10 terisi |
-| 13 | Langkah 08 evaluasi | gee | progres-4 | CSV 432 baris di `data/`; PNG Gambar 2 di `hasil/gambar/` |
+| 13 | Langkah 08 evaluasi | gee | progres-4 | CSV 1872 baris (26 konfigurasi, 12 kombinasi) di `data/`; PNG Gambar 2 di `hasil/gambar/` |
 | 14 | Langkah 09 tabel hasil | python | progres-4 | `hasil/tabel_hasil.md` |
 | 15 | Laporan progres 3 | laporan | progres-3 | `docs/laporan/` berisi laporan baru; tag `progres-3` |
 | 16 | Naskah jurnal: metode, hasil, keterbatasan | dokumentasi | naskah | Draf naskah diperbarui dengan Tabel VIII–XIII |

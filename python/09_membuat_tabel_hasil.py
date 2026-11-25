@@ -9,8 +9,13 @@ Tujuan   : Mengubah CSV dari GEE menjadi tabel siap tempel ke naskah:
              Tabel XI    ketahanan peringkat terhadap keraguan referensi
              Tabel XII   objek apung yang ikut terpetakan sebagai air
              Tabel XIII  kesepakatan lima penilai (bila CSV 06c diberikan)
+             Tabel XIV   pemilihan konfigurasi: rata-rata seluruh kombinasi
+                         LATIH (A-C pada T1, T2; D, E, F) dan hasil UJI T3
            dan korelasi peringkat Spearman rho antara T1 dan T2.
-           Tabel VIII-X dan XII memakai semua piksel (tingkat 'semua').
+           Tabel VIII-XII memakai petak A-C pada T1 dan T2 dengan semua
+           piksel (tingkat 'semua'). Tabel XIV juga disimpan sebagai
+           09_pemilihan_konfigurasi.csv (tempel ke spreadsheet tab 2_PCD_Air).
+           Konfigurasi terbaik = peringkat 1 Tabel XIV (kolom latih), bukan T3.
 Masukan  : 08_evaluasi_<vref>_<vpeta>.csv (Langkah 08)
            07_ambang_otomatis_<vpeta>.csv  (Langkah 07, mode 'ekspor')
            opsional: 06c_kesepakatan_vote_<v>.csv dan
@@ -28,15 +33,18 @@ import csv
 import sys
 from collections import defaultdict
 
-KONF = [f"K{i}" for i in range(1, 13)]          # urutan sama dengan Tabel IV naskah
-PETAK = ["A", "B", "C"]
+# 26 konfigurasi, urutan dan nomor sama dengan Langkah 07 dan 08.
+# Ambang tetap 0 hanya untuk indeks ternormalisasi (NDWI, MNDWI, NDVI).
+TRANSFORMASI = [("NDWI", True), ("MNDWI", True), ("NDVI", True), ("GRAY", False), ("PCA1", False)]
+# Pasangan (transformasi, metode ambang); tiap pasangan punya versi tanpa
+# (K ganjil) dan dengan pascaproses (K genap).
+LABEL_IM = [(nama, m) for nama, tetap in TRANSFORMASI
+            for m in (["Tetap 0"] if tetap else []) + ["Otsu global", "Canny-Otsu"]]
+KONF = [f"K{i}" for i in range(1, 2 * len(LABEL_IM) + 1)]
+INFO_KONF = {KONF[2 * n + j]: (ind, met, pasca) for n, (ind, met) in enumerate(LABEL_IM)
+             for j, pasca in enumerate(("Tanpa", "Dengan"))}
+PETAK = ["A", "B", "C"]                      # Tabel VIII-XIII
 KODE = ["T1", "T2"]
-# Pasangan (indeks, metode ambang); tiap pasangan punya versi tanpa (K ganjil)
-# dan dengan pascaproses (K genap).
-LABEL_IM = [
-    ("NDWI", "Tetap 0"), ("NDWI", "Otsu global"), ("NDWI", "Canny-Otsu"),
-    ("MNDWI", "Tetap 0"), ("MNDWI", "Otsu global"), ("MNDWI", "Canny-Otsu"),
-]
 
 
 def angka(x):
@@ -154,11 +162,13 @@ def main(path_eval, path_ambang, path_sepakat=None, path_pasangan=None):
     with open(path_ambang, newline="", encoding="utf-8") as f:
         for b in csv.DictReader(f):
             ambang[b["kode"]] = b
-    out.append("TABEL X. Nilai ambang otomatis pada dua tanggal\n")
-    out.append("| Indeks dan metode | t* pada T1 | t* pada T2 | Selisih |")
+    out.append("TABEL X. Nilai ambang otomatis pada dua tanggal "
+               "(skala kanal 'air tinggi': NDVI = -NDVI; GRAY dan PCA1 diskalakan)\n")
+    out.append("| Transformasi dan metode | t* pada T1 | t* pada T2 | Selisih |")
     out.append("| --- | --- | --- | --- |")
-    for kolom, label in [("t_NDWI_otsu", "NDWI, Otsu global"), ("t_NDWI_canny", "NDWI, Canny–Otsu"),
-                         ("t_MNDWI_otsu", "MNDWI, Otsu global"), ("t_MNDWI_canny", "MNDWI, Canny–Otsu")]:
+    pasangan_ambang = [(f"t_{nama}_{m}", f"{nama}, {lbl}") for nama, _ in TRANSFORMASI
+                       for m, lbl in (("otsu", "Otsu global"), ("canny", "Canny–Otsu"))]
+    for kolom, label in pasangan_ambang:
         a = angka(ambang.get("T1", {}).get(kolom))
         b = angka(ambang.get("T2", {}).get(kolom))
         beda = None if a is None or b is None else b - a
@@ -236,11 +246,79 @@ def main(path_eval, path_ambang, path_sepakat=None, path_pasangan=None):
             out.append(f"| {kel} | " + " | ".join(sel) + " |")
         out.append("")
 
+    # ---- TABEL XIV ------------------------------------------------------
+    # Pemilihan konfigurasi: rata-rata seluruh kombinasi LATIH (r_air, semua
+    # piksel), peringkat dari IoU latih. Baris UJI (T3) hanya dilaporkan.
+    def peran_baris(b):
+        return b.get("peran") or ("uji" if b["kode"] == "T3" else "latih")
+
+    def kappa(b):
+        tp, fp, fn, tn = (angka(b.get(c)) for c in ("TP", "FP", "FN", "TN"))
+        if None in (tp, fp, fn, tn):
+            return None
+        n = tp + fp + fn + tn
+        if n == 0:
+            return None
+        po = (tp + tn) / n
+        pe = ((tp + fp) * (tp + fn) + (fn + tn) * (fp + tn)) / n ** 2
+        return None if pe == 1 else (po - pe) / (1 - pe)
+
+    def sd(nilai):
+        nilai = [v for v in nilai if v is not None]
+        if len(nilai) < 2:
+            return None
+        m = sum(nilai) / len(nilai)
+        return (sum((v - m) ** 2 for v in nilai) / (len(nilai) - 1)) ** 0.5
+
+    baris_r_air = [b for (p, t, k, r, tk), b in semua.items() if r == "r_air" and tk == "semua"]
+    pilih = {}
+    for k in KONF:
+        lat = [b for b in baris_r_air if b["konf"] == k and peran_baris(b) == "latih"]
+        uj = [b for b in baris_r_air if b["konf"] == k and peran_baris(b) == "uji"]
+        iou_l = [angka(b.get("iou")) for b in lat]
+        pilih[k] = {
+            "n_latih": len(lat), "n_uji": len(uj),
+            "latih_iou": rata(iou_l), "latih_iou_sd": sd(iou_l),
+            "latih_f1": rata([angka(b.get("f1")) for b in lat]),
+            "latih_oa": rata([angka(b.get("oa")) for b in lat]),
+            "latih_kappa": rata([kappa(b) for b in lat]),
+            "uji_iou": rata([angka(b.get("iou")) for b in uj]),
+            "uji_f1": rata([angka(b.get("f1")) for b in uj]),
+            "uji_kappa": rata([kappa(b) for b in uj]),
+        }
+    rank_latih = peringkat({k: (v["latih_iou"] if v["latih_iou"] is not None else -1)
+                            for k, v in pilih.items()})
+    out.append("TABEL XIV. Pemilihan konfigurasi: IoU air (r_air) rata-rata seluruh kombinasi latih, "
+               "dan hasil uji T3. Peringkat dari kolom latih saja.\n")
+    out.append("| Kode | Transformasi | Ambang | Pascaproses | IoU latih | SD | F1 latih | Kappa latih "
+               "| Peringkat | IoU T3 | Kappa T3 |")
+    out.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    for k in KONF:
+        v, (ind, met, pas) = pilih[k], INFO_KONF[k]
+        r = rank_latih[k]
+        out.append(f"| {k} | {ind} | {met} | {pas} | {fmt(v['latih_iou'])} | {fmt(v['latih_iou_sd'])} | "
+                   f"{fmt(v['latih_f1'])} | {fmt(v['latih_kappa'])} | {fmt(r, 0 if r == int(r) else 1)} | "
+                   f"{fmt(v['uji_iou'])} | {fmt(v['uji_kappa'])} |")
+    n_lat = max((v["n_latih"] for v in pilih.values()), default=0)
+    n_uji = max((v["n_uji"] for v in pilih.values()), default=0)
+    out.append(f"\nJumlah kombinasi petak x tanggal: latih {n_lat}, uji {n_uji}.\n")
+    with open("09_pemilihan_konfigurasi.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["konf", "transformasi", "ambang", "pascaproses", "latih_iou", "latih_iou_sd",
+                    "latih_f1", "latih_oa", "latih_kappa", "peringkat_latih", "uji_iou", "uji_f1",
+                    "uji_kappa", "n_latih", "n_uji"])
+        for k in KONF:
+            v, (ind, met, pas) = pilih[k], INFO_KONF[k]
+            bul = lambda x: "" if x is None else round(x, 4)
+            w.writerow([k, ind, met, pas, bul(v["latih_iou"]), bul(v["latih_iou_sd"]), bul(v["latih_f1"]),
+                        bul(v["latih_oa"]), bul(v["latih_kappa"]), rank_latih[k], bul(v["uji_iou"]),
+                        bul(v["uji_f1"]), bul(v["uji_kappa"]), v["n_latih"], v["n_uji"]])
+
     teks = "\n".join(out)
     print(teks)
     with open("tabel_hasil.md", "w", encoding="utf-8") as f:
         f.write(teks + "\n")
-    print("\nTersimpan: tabel_hasil.md")
+    print("\nTersimpan: tabel_hasil.md dan 09_pemilihan_konfigurasi.csv")
 
 
 if __name__ == "__main__":

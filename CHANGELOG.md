@@ -2,6 +2,25 @@
 
 Perubahan metode dan skrip, terbaru di atas. Setiap entri menyebut alasannya.
 
+## 2026-11-25
+
+- **Segmentasi air menjadi 26 konfigurasi** (`07_menyegmentasi_26_konfigurasi.js` menggantikan `07_menyegmentasi_12_konfigurasi.js`). Transformasi satu kanal ditambah NDVI, grayscale RGB, dan PCA1; semua kanal diorientasikan "air bernilai tinggi" dan diberi ambang serta morfologi yang sama. K1–K12 tidak berubah. Ambang tetap 0 hanya untuk indeks ternormalisasi. Alasan: membandingkan transformasi citra secara adil, termasuk apakah citra RGB saja cukup.
+  - Peta dibuat untuk T1, T2, T3, D1, D2, D3 (`VERSI_PETA = 'v2'`; peta v1 berisi 12 band dan menjadi arsip).
+  - Mode `setel` hanya menghitung satu transformasi (`TRANSFORMASI_SETEL`) dan menutup petak A–F; mode `ekspor` tidak mencetak ambang ke Console, agar tidak memicu "Too many concurrent aggregations".
+- `08`: 26 konfigurasi × 12 kombinasi petak–tanggal (1872 baris) dengan kolom `peran` (latih/uji). Kombinasi yang referensi atau petanya belum ada dilewati dan dicetak.
+- `09`: tabel diperluas ke 26 konfigurasi; **Tabel XIV** memilih konfigurasi terbaik dari rata-rata kombinasi **latih** saja (T3 hanya dilaporkan) dan menyimpannya ke `09_pemilihan_konfigurasi.csv`.
+- `10`: `TERBAIK` bisa berupa transformasi mana pun; fungsi transformasi disalin persis dari Langkah 07. `VERSI_DATASET = 'v2'`.
+- **Notebook 11**:
+  - E0 baru: lima aturan PCD tiga kelas tanpa ML (R1–R5) dengan ambang Otsu dari data latih, sebagai pembanding ML.
+  - Set fitur FRGB (B2, B3, B4) ditambah; nama set menjadi FRGB, F0, F01, F012, F0123 (sama dengan spreadsheet). Kombinasi terbaik dipilih dari 25 kombinasi model × set fitur menurut CV.
+  - Skor CV kini mencatat OA, kappa, F1 per kelas, dan SD antarlipatan (sebelumnya SD antarseed selalu nol karena CV dihitung sekali).
+  - E3 menjadi empat perbandingan terencana (terbaik vs kedua, vs PCD terbaik, vs F0, vs FRGB) dengan koreksi Holm atas keempatnya, plus selisih F1 makro dan IK bootstrap.
+  - Keluaran siap tempel ke spreadsheet: `e1e2_cv_untuk_spreadsheet.csv` (M01–M25) dan `e3_uji_t3_untuk_spreadsheet.csv`. E5 juga mencatat skor CV.
+  - Diuji ujung ke ujung dengan data tiruan.
+- `docs/panduan-penilai.md` bagian 11: aturan digitasi KJA sebagai blok (piksel dominan, lorong < 40 m ikut blok, basemap mati) dan aturan eceng gondok tipis.
+- `docs/metodologi-ml.md`: RQ6 (ML vs PCD) dan RQ7 (RGB vs multispektral); dasar keputusan petak D–F ditambah Verhulst dkk. (2024) dan Meyer dkk. (2018).
+- `docs/referensi.md`: kolom bagian yang dikutip. `docs/laporan/`, `presentasi/`, dan `tools/` dikembalikan karena dirujuk README.
+
 ## 2026-11-20
 
 - **Digitasi ulang v2** setelah kalibrasi ulang dengan kunci interpretasi citra resolusi tinggi di area latihan. Alasan: kesepakatan v1 rendah untuk eceng gondok dan KJA (κ r_eg B_T1 = 0,21; IoU r_kja antarpenilai 0,31–0,43), sedangkan judul menjanjikan peta objek apung.
@@ -9,7 +28,7 @@ Perubahan metode dan skrip, terbaru di atas. Setiap entri menyebut alasannya.
   - Asset v1 tetap disimpan untuk membandingkan kesepakatan sebelum dan sesudah kalibrasi.
 - **Data latih diperluas**: petak D (eceng gondok) pada D1, E (KJA) pada D2, F (eceng gondok) pada D3, digitasi lima penilai. Alasan: data latih semula hanya 3 lokasi dan 2 tanggal (keduanya Agustus); voting v1 menunjukkan eceng gondok (34,9 ha latih) dan KJA (45,4 ha) seimbang tetapi masing-masing dari satu kawasan, dan eceng gondok paling berubah antartanggal. Satu tanggal per petak tambahan memberi lebih banyak kondisi waktu daripada dua tanggal untuk ketiganya, dengan biaya lebih kecil (12 vs 15 kombinasi). 05b memeriksa syarat petak (≥ 1 km dari A–C, ≥ 50% di dalam waduk, tidak tumpang tindih) dan vegetasi apung ≥ 5 ha di D dan F.
 - **T3 sebelum Oktober 2025**: tanggal uji tidak harus sesudah T1. Alasan: data uji tanpa PLTS terapung agar kelasnya sama dengan data latih. T1, T2, T3, D1, D2, D3 saling berjarak ≥ 60 hari.
-- `05b_memilih_tanggal_dan_petak_tambahan.js` menggantikan `05b_memilih_tanggal_uji_T3.js`. Versi lama memicu "Too many concurrent aggregations" karena menghitung `reduceRegion` per petak di dalam `map` per tanggal. Kini satu `reduceRegion` per tanggal (semua petak dalam satu citra berlabel), Console dibatasi pada `TAHUN_TAMPIL`, dan tabel lengkap diekspor ke CSV.
+- `05b_memilih_tanggal_uji_T3_dan_petak_tambahan.js` menggantikan `05b_memilih_tanggal_uji_T3.js`. Versi lama memicu "Too many concurrent aggregations" karena menghitung `reduceRegion` per petak di dalam `map` per tanggal. Kini satu `reduceRegion` per tanggal (semua petak dalam satu citra berlabel), Console dibatasi pada `TAHUN_TAMPIL`, dan tabel lengkap diekspor ke CSV.
 - Pencegahan galat yang sama di skrip lain:
   - `06c`: semua tanggal dan ukuran satu petak dihitung dalam satu `reduceRegion` (6 agregasi, bukan 2 per kombinasi); hasil kappa dan IoU tidak berubah. Kombinasi diatur lewat `PETAK_KODE`.
   - `07`: ambang otomatis dicetak per tanggal.

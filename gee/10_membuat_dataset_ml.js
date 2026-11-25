@@ -56,8 +56,8 @@ var ASSET = 'projects/earth-engine-511102/assets/';
 var VERSI_PETAK   = 'v1';        // dibaca (Langkah 05)
 var VERSI_TAMBAHAN = 'v1';       // dibaca (Langkah 05b)
 var VERSI_VOTE    = 'v2';        // dibaca (Langkah 06c)
-var VERSI_PETA    = 'v1';        // dibaca untuk cek konsistensi (Langkah 07)
-var VERSI_DATASET = 'v1';        // ditulis langkah ini (nama CSV)
+var VERSI_PETA    = 'v2';        // dibaca untuk cek konsistensi (Langkah 07, 26 konfigurasi)
+var VERSI_DATASET = 'v2';        // ditulis langkah ini (nama CSV); v2 = label vote v2
 
 var KODE = ['T1', 'T2', 'T3', 'D1', 'D2', 'D3'];   // tanggal yang diekspor dengan label
 var PETAK_KODE = {A: ['T1', 'T2', 'T3'], B: ['T1', 'T2', 'T3'], C: ['T1', 'T2', 'T3'],
@@ -67,8 +67,10 @@ var ILUSTRASI = '';              // opsional: tanggal terbaru 'YYYY-MM-DD' untuk
                                  // ilustrasi; area PLTS dimasker dengan lapisan 'plts'
 var TAMPIL = {petak: 'B', kode: 'T1'};
 
-// Konfigurasi segmentasi TERBAIK dari Langkah 08 (isi setelah Naskah 1).
-var TERBAIK = {indeks: 'MNDWI', ambang: 'canny'};   // indeks: NDWI|MNDWI; ambang: tetap|otsu|canny
+// Konfigurasi segmentasi TERBAIK dari Langkah 09 (peringkat 1 pada data LATIH).
+// indeks: NDWI | MNDWI | NDVI | GRAY | PCA1; ambang: tetap | otsu | canny
+// (ambang 'tetap' hanya untuk NDWI, MNDWI, NDVI).
+var TERBAIK = {indeks: 'MNDWI', ambang: 'canny'};
 
 // Parameter segmentasi: SALIN dari Langkah 07 (nilai final, Excel Tabel 8).
 var BUFFER_OTSU_M = 500;
@@ -78,6 +80,8 @@ var L_MIN   = 10;
 var RB_PX   = 3;
 var R_CLOSE = 1;
 var A_MAX   = 1024;
+var SKALA_GRAY = 0.3;
+var SKALA_PCA  = 3;
 
 // Parameter ekstraksi fitur (Tabel III Naskah 2).
 var RAD_SD     = 2;    // jendela simpangan baku lokal: (2*2+1) = 5x5 piksel 10 m
@@ -144,6 +148,92 @@ function maskerBersih(scl) {
 function ke20(img10) {
   return img10.setDefaultProjection(P10)
     .reduceResolution({reducer: ee.Reducer.mean(), maxPixels: 16}).reproject(P20);
+}
+
+
+// ---------------------------------------------------------------------
+// 1b. TRANSFORMASI SATU KANAL (SALINAN PERSIS DARI LANGKAH 07 BAGIAN 1b)
+// ---------------------------------------------------------------------
+var PITA = ['B2', 'B3', 'B4', 'B8', 'B5', 'B6', 'B7', 'B8A', 'B11', 'B12'];
+var TRANSFORMASI = [
+  {nama: 'NDWI',  tetap: true},
+  {nama: 'MNDWI', tetap: true},
+  {nama: 'NDVI',  tetap: true},
+  {nama: 'GRAY',  tetap: false},
+  {nama: 'PCA1',  tetap: false}
+];
+var NAMA_METODE = {tetap: 'Tetap 0', otsu: 'Otsu global', canny: 'Canny-Otsu'};
+
+// Daftar 26 konfigurasi dengan nomor K yang tetap (urutan Tabel IV naskah).
+function daftarKonfigurasi() {
+  var out = [], k = 0;
+  TRANSFORMASI.forEach(function (tr) {
+    (tr.tetap ? ['tetap', 'otsu', 'canny'] : ['otsu', 'canny']).forEach(function (m) {
+      ['Tanpa', 'Dengan'].forEach(function (p) {
+        k += 1;
+        out.push({k: 'K' + k, indeks: tr.nama, kunci: m, metode: NAMA_METODE[m], pasca: p});
+      });
+    });
+  });
+  return out;
+}
+var KONF = daftarKonfigurasi();
+
+// PCA per tanggal: rata-rata dan kovarians 10 pita di daerah histogram
+// (piksel bersih), lalu proyeksi ke vektor eigen pertama. Tanda diatur agar
+// air bernilai tinggi: muatan B8 (NIR) positif berarti air bernilai rendah,
+// jadi dikalikan -1.
+function pca1(img, ok) {
+  var daerah = daerahHist.and(ok);
+  var x = img.select(PITA);
+  var rata = x.updateMask(daerah).reduceRegion({
+    reducer: ee.Reducer.mean(), geometry: AOI, crs: CRS, crsTransform: GRID,
+    maxPixels: 1e10, tileScale: 4
+  });
+  var pusat = x.subtract(ee.Image.constant(rata.values(PITA)).rename(PITA));
+  var arr = pusat.toArray();
+  var cov = arr.updateMask(daerah).reduceRegion({
+    reducer: ee.Reducer.centeredCovariance(), geometry: AOI, crs: CRS, crsTransform: GRID,
+    maxPixels: 1e10, tileScale: 4
+  });
+  var eig = ee.Array(cov.get('array')).eigen();            // baris urut nilai eigen menurun
+  var lambda1 = ee.Number(eig.get([0, 0]));
+  var total = ee.Number(eig.slice(1, 0, 1).reduce(ee.Reducer.sum(), [0]).get([0, 0]));
+  var v1 = eig.slice(1, 1).slice(0, 0, 1);                  // 1 x 10
+  var tanda = ee.Number(v1.get([0, PITA.indexOf('B8')])).gte(0).multiply(-2).add(1);
+  var pc1 = ee.Image(v1).matrixMultiply(arr.toArray(1)).arrayGet([0, 0]);
+  return {
+    idx: pc1.divide(lambda1.sqrt()).multiply(tanda).divide(SKALA_PCA),
+    varRasio: lambda1.divide(total), tanda: tanda
+  };
+}
+
+// Mengembalikan {idx: citra 1 band bernama 'idx', info: {...}}.
+function transformasi(img, nama, ok) {
+  var x = img.select(PITA);
+  var idx, info = {};
+  if (nama === 'NDWI') idx = x.normalizedDifference(['B3', 'B8']);
+  if (nama === 'MNDWI') idx = x.normalizedDifference(['B3', 'B11']);
+  if (nama === 'NDVI') idx = x.normalizedDifference(['B8', 'B4']).multiply(-1);
+  if (nama === 'GRAY') {
+    idx = x.expression('0.299 * R + 0.587 * G + 0.114 * B',
+      {R: x.select('B4'), G: x.select('B3'), B: x.select('B2')})
+      .divide(SKALA_GRAY).min(1).multiply(-2).add(1);
+  }
+  if (nama === 'PCA1') {
+    var p = pca1(img, ok);
+    idx = p.idx;
+    info = {pca_var_rasio: p.varRasio, pca_tanda: p.tanda};
+  }
+  return {idx: idx.rename('idx').updateMask(ok), info: info};
+}
+
+var konfTerbaik = KONF.filter(function (c) {
+  return c.indeks === TERBAIK.indeks && c.kunci === TERBAIK.ambang;
+});
+if (konfTerbaik.length !== 2) {
+  throw new Error('TERBAIK tidak dikenal: ' + JSON.stringify(TERBAIK) +
+    '. Ambang tetap hanya untuk NDWI, MNDWI, NDVI.');
 }
 
 
@@ -251,11 +341,10 @@ function fitur(kode) {
     tutup.subtract(nirF).rename('tophat_hitam')));
 
   // F3 — bentuk dari hasil segmentasi terbaik:
-  //   air_pcd   = peta air tanpa pascaproses (indeks > ambang, dibatasi L)
+  //   air_pcd   = peta air tanpa pascaproses (kanal > ambang, dibatasi L)
   //   waduk_pcd = peta setelah closing + hole filling (masker permukaan waduk)
   //   kandidat  = waduk_pcd DAN BUKAN air_pcd (lubang yang terisi = objek apung)
-  var idx = (TERBAIK.indeks === 'NDWI' ? F1.select('ndwi') : F1.select('mndwi'))
-    .rename('idx').updateMask(bersih);
+  var idx = transformasi(F0, TERBAIK.indeks, bersih).idx;   // kanal 'air tinggi'
   var t = ambang(idx);
   var w = idx.gt(t).unmask(0);
   var airPcd = w.and(L).rename('air_pcd');
@@ -381,14 +470,13 @@ if (MODE === 'periksa') {
   }
 
   // Uji konsistensi: masker PCD di skrip ini vs Asset peta Langkah 07 (T1).
-  var nomor = (TERBAIK.indeks === 'NDWI' ? 0 : 6) +
-    {tetap: 0, otsu: 2, canny: 4}[TERBAIK.ambang];
+  var kTanpa = konfTerbaik[0].k, kDengan = konfTerbaik[1].k;
   var peta07 = ee.Image(ASSET + 'saguling_peta_T1_' + VERSI_PETA);
   var f1 = fitur('T1').img;
   var cocok = ee.Image.cat(
-    f1.select('air_pcd').eq(peta07.select('K' + (nomor + 1))).rename('air'),
-    f1.select('waduk_pcd').eq(peta07.select('K' + (nomor + 2))).rename('waduk'));
-  print('Kecocokan dengan Langkah 07 (K' + (nomor + 1) + ' dan K' + (nomor + 2) + ', harus ~1.0):',
+    f1.select('air_pcd').eq(peta07.select(kTanpa)).rename('air'),
+    f1.select('waduk_pcd').eq(peta07.select(kDengan)).rename('waduk'));
+  print('Kecocokan dengan Langkah 07 (' + kTanpa + ' dan ' + kDengan + ', harus ~1.0):',
     cocok.reduceRegion({reducer: ee.Reducer.mean(), geometry: petakFC.geometry(),
       crs: CRS, crsTransform: GRID, maxPixels: 1e8}));
 

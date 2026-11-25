@@ -19,7 +19,7 @@ Notebook ini berjalan di **Kaggle** dan **Google Colab** tanpa perubahan kode.
 
 | Lingkungan | Cara menyiapkan data |
 | --- | --- |
-| Kaggle | *Add Input* → *Upload* → unggah CSV `dataset_T1_v1.csv`, `dataset_T2_v1.csv`, `dataset_D1_v1.csv`, `dataset_D2_v1.csv`, `dataset_D3_v1.csv`, `dataset_T3_v1.csv` (dan opsional `waduk_T3_v1.csv`) sebagai satu Dataset. Notebook mencarinya otomatis di `/kaggle/input`. |
+| Kaggle | *Add Input* → *Upload* → unggah CSV `dataset_T1_v2.csv`, `dataset_T2_v2.csv`, `dataset_D1_v2.csv`, `dataset_D2_v2.csv`, `dataset_D3_v2.csv`, `dataset_T3_v2.csv` (dan opsional `waduk_T3_v2.csv`) sebagai satu Dataset. Notebook mencarinya otomatis di `/kaggle/input`. |
 | Colab | CSV sudah ada di Google Drive folder `PCD_Saguling` (hasil Langkah 10). Notebook akan meminta izin *mount* Drive. |
 
 Hasil (tabel CSV, gambar PNG, model) disimpan ke `hasil_ml/`. Di Kaggle unduh dari tab *Output*; di Colab tersimpan di Drive.
@@ -27,11 +27,12 @@ Hasil (tabel CSV, gambar PNG, model) disimpan ke `hasil_ml/`. Di Kaggle unduh da
 **Urutan eksperimen** (lihat `docs/metodologi-ml.md`):
 **Data:** latih = petak A–C pada T1, T2 + petak D (D1), E (D2), F (D3); uji = petak A–C pada T3.
 
-**Pemilihan model terbaik memakai skor validasi silang pada data latih, bukan skor T3**, agar data uji tidak ikut menentukan keputusan apa pun.
+**Pemilihan terbaik memakai data latih saja**: model ML dari skor validasi silang, aturan PCD dari skor pada data latih. Skor T3 hanya dilaporkan, agar data uji tidak ikut menentukan keputusan apa pun.
 
-1. **E1 Perbandingan model**: 5 model × fitur lengkap, dilatih pada semua data latih, diuji di T3.
-2. **E2 Ablasi fitur PCD**: 4 kelompok fitur bertambah (F0 → F0–F3) untuk setiap model.
-3. **E3 Uji statistik**: McNemar (koreksi Holm) dan interval kepercayaan bootstrap per blok.
+0. **E0 Pembanding PCD tiga kelas**: lima aturan tanpa ML (R1–R5), ambang Otsu dari data latih.
+1. **E1 Perbandingan model**: 5 model × 5 set fitur (FRGB, F0, F01, F012, F0123), dilatih pada semua data latih, diuji di T3.
+2. **E2 Ablasi fitur PCD**: kelompok fitur bertambah (FRGB → F0 → F0123) untuk setiap model.
+3. **E3 Uji statistik**: empat uji McNemar (koreksi Holm) dan interval kepercayaan bootstrap per blok.
 4. **E4 Analisis**: matriks konfusi, kepentingan fitur, uji silang antartanggal, pembanding PCD.
 5. **E5 Petak latih tambahan**: model terbaik dilatih dengan dan tanpa petak D–F, lalu dibandingkan di T3.
 6. **(Opsional) Peta dan luas seluruh waduk.**
@@ -42,7 +43,7 @@ Jalankan **Runtime → Run all**. Waktu jalan biasanya beberapa menit; SVM adala
 md("## 0. Parameter")
 code(r"""
 # ====== PARAMETER YANG BOLEH DIUBAH ======
-VERSI_DATASET = 'v1'          # akhiran CSV dari Langkah 10
+VERSI_DATASET = 'v2'          # akhiran CSV dari Langkah 10 (v2 = label voting v2)
 LATIH = ['T1', 'T2', 'D1', 'D2', 'D3']   # tanggal data latih (D1 = petak D, D2 = E, D3 = F)
 PETAK_TAMBAHAN = ['D', 'E', 'F']    # petak latih tambahan (Langkah 05b)
 UJI = 'T3'                    # tanggal data uji (tidak pernah dilihat saat pelatihan)
@@ -118,13 +119,19 @@ F1 = ['ndwi', 'mndwi', 'ndvi']
 F2 = ['sd_nir', 'glcm_kontras', 'glcm_homogen', 'glcm_entropi', 'kepadatan_tepi']
 F3 = ['tophat_putih', 'tophat_hitam', 'luas_komponen', 'jarak_air']
 KELOMPOK = {'F0': F0, 'F1': F1, 'F2': F2, 'F3': F3}
+FRGB = ['B2', 'B3', 'B4']             # pembanding: hanya pita tampak (RGB)
 SET_FITUR = {                         # E2: kelompok fitur bertambah
+    'FRGB': FRGB,
     'F0': F0,
-    'F0-F1': F0 + F1,
-    'F0-F2': F0 + F1 + F2,
-    'F0-F3': F0 + F1 + F2 + F3,
+    'F01': F0 + F1,
+    'F012': F0 + F1 + F2,
+    'F0123': F0 + F1 + F2 + F3,
 }
-LENGKAP = 'F0-F3'
+LENGKAP = 'F0123'
+MODEL_URUT = ['LR', 'SVM', 'RF', 'HGB', 'MLP']
+# ID baris di spreadsheet (tab 4_ML_CV): M01 = LR FRGB ... M25 = MLP F0123.
+ID_ML = {(m, fs): f'M{i * len(MODEL_URUT) + j + 1:02d}'
+         for i, fs in enumerate(SET_FITUR) for j, m in enumerate(MODEL_URUT)}
 
 def muat(kode):
     p = cari(f'dataset_{kode}_{VERSI_DATASET}.csv')
@@ -257,6 +264,86 @@ tabel_n.to_csv(f'{OUT_DIR}/jumlah_data_latih_uji.csv')
 """)
 
 md(r"""
+## 3b. E0: Pembanding PCD tiga kelas (aturan tanpa ML)
+Aturan PCD memakai peta air terbaik Langkah 07 (`air_pcd`) lalu memisahkan eceng gondok dan KJA pada piksel bukan air. Semua ambang dihitung dengan **Otsu pada data latih saja**, tanpa melihat label, sehingga aturan ini setara dengan "PCD tanpa pembelajaran". Aturan terbaik dipilih dari F1 makro pada data latih, lalu dibandingkan dengan ML di E3.
+
+| Aturan | Air | EG vs KJA (piksel bukan air) |
+| --- | --- | --- |
+| R1 | `air_pcd` | NDVI ≥ t_ndvi → EG, selain itu KJA |
+| R2 | `air_pcd` | R1, lalu komponen kecil (0 < luas < t_luas) → KJA |
+| R3 | `air_pcd` | R1, lalu tekstur tinggi (sd_nir ≥ t_sd) → KJA |
+| R4 | `air_pcd` | R1, lalu tekstur tinggi DAN komponen kecil → KJA |
+| R5 | gray < t_g1 (grayscale RGB) | gray ≥ t_g2 → KJA, selain itu EG (pembanding RGB) |
+""")
+code(r"""
+def metrik(y, p):
+    pr, rc, f1, _ = precision_recall_fscore_support(y, p, labels=[0, 1, 2], zero_division=0)
+    return {'OA': accuracy_score(y, p), 'kappa': cohen_kappa_score(y, p),
+            'F1_makro': f1_score(y, p, labels=[0, 1, 2], average='macro', zero_division=0),
+            'F1_air': f1[0], 'F1_eg': f1[1], 'F1_kja': f1[2],
+            'recall_air': rc[0], 'recall_eg': rc[1], 'recall_kja': rc[2]}
+
+def ambang_otsu(v, bins=256):
+    # Otsu pada histogram 256 kelas: ambang dengan varians antarkelas terbesar.
+    v = np.asarray(v, float); v = v[np.isfinite(v)]
+    if len(v) < 2:
+        return np.nan
+    v = np.clip(v, *np.percentile(v, [0.5, 99.5]))       # pencilan tidak melebarkan histogram
+    if v.min() == v.max():
+        return np.nan
+    h, tepi = np.histogram(v, bins=bins)
+    c = (tepi[:-1] + tepi[1:]) / 2
+    w0 = np.cumsum(h); w1 = w0[-1] - w0
+    m0 = np.cumsum(h * c) / np.maximum(w0, 1)
+    m1 = ((h * c).sum() - np.cumsum(h * c)) / np.maximum(w1, 1)
+    return float(c[np.argmax(w0 * w1 * (m0 - m1) ** 2)])
+
+def gray(d):
+    return 0.299 * d['B4'] + 0.587 * d['B3'] + 0.114 * d['B2']   # ITU-R BT.601
+
+# Ambang dari data latih (label TIDAK dipakai).
+bukan_air = latih[latih['air_pcd'] == 0]
+AMBANG_PCD = {
+    't_ndvi': ambang_otsu(bukan_air['ndvi']),
+    't_luas': ambang_otsu(bukan_air.loc[bukan_air['luas_komponen'] > 0, 'luas_komponen']),   # skala log1p
+    't_sd': ambang_otsu(bukan_air['sd_nir']),
+    't_g1': ambang_otsu(gray(latih)),
+}
+AMBANG_PCD['t_g2'] = ambang_otsu(gray(latih)[gray(latih) >= AMBANG_PCD['t_g1']])
+
+def aturan(d, r):
+    t = AMBANG_PCD
+    if r == 'R5':
+        g = gray(d).values
+        return np.where(g < t['t_g1'], 0, np.where(g >= t['t_g2'], 2, 1))
+    air = d['air_pcd'].values == 1
+    kja = d['ndvi'].values < t['t_ndvi']
+    kecil = (d['luas_komponen'].values > 0) & (d['luas_komponen'].values < t['t_luas'])
+    kasar = d['sd_nir'].values >= t['t_sd']
+    if r == 'R2': kja = kja | kecil
+    if r == 'R3': kja = kja | kasar
+    if r == 'R4': kja = kja | (kasar & kecil)
+    return np.where(air, 0, np.where(kja, 2, 1))
+
+baris_pcd = []
+for r in ['R1', 'R2', 'R3', 'R4', 'R5']:
+    ml, mu = metrik(latih['label'].values, aturan(latih, r)), metrik(uji['label'].values, aturan(uji, r))
+    baris_pcd.append({'aturan': r, **{f'latih_{k}': v for k, v in ml.items()},
+                      **{f'uji_{k}': v for k, v in mu.items()}})
+e0 = pd.DataFrame(baris_pcd).set_index('aturan')
+e0['peringkat_latih'] = e0['latih_F1_makro'].rank(ascending=False, method='min').astype(int)
+PCD_TERBAIK = e0['latih_F1_makro'].idxmax()            # dipilih dari data LATIH
+pred_pcd = aturan(uji, PCD_TERBAIK)
+print('Ambang (dari data latih):', {k: round(v, 4) for k, v in AMBANG_PCD.items()})
+print('Aturan PCD terbaik menurut data latih:', PCD_TERBAIK)
+kol_e0 = ['latih_F1_air', 'latih_F1_eg', 'latih_F1_kja', 'latih_F1_makro', 'latih_OA', 'latih_kappa',
+          'peringkat_latih', 'uji_F1_air', 'uji_F1_eg', 'uji_F1_kja', 'uji_F1_makro', 'uji_OA', 'uji_kappa']
+display(e0[kol_e0].round(4)) if 'display' in globals() else print(e0[kol_e0].round(4))
+e0[kol_e0].round(4).to_csv(f'{OUT_DIR}/e0_pcd_tiga_kelas.csv')
+pd.Series(AMBANG_PCD).round(6).to_csv(f'{OUT_DIR}/e0_ambang_pcd.csv')
+""")
+
+md(r"""
 ## 4. Model yang dibandingkan
 Lima model mewakili lima keluarga pengklasifikasi yang umum di penginderaan jauh. Setiap model diberi penanganan ketidakseimbangan kelas yang setara: bobot kelas seimbang, atau *oversampling* di dalam fold untuk MLP. Hiperparameter disetel dengan **GroupKFold per blok 200 m pada data latih saja**; data uji tidak pernah dipakai untuk penyetelan.
 """)
@@ -317,26 +404,32 @@ NAMA_MODEL = {'LR': 'Regresi logistik', 'SVM': 'SVM (RBF)', 'RF': 'Random forest
               'HGB': 'Gradient boosting (HGB)', 'MLP': 'MLP'}
 """)
 
-md("## 5. E1 dan E2 — Perbandingan model dan ablasi fitur")
+md("## 5. E1 dan E2: Perbandingan model dan ablasi fitur")
 code(r"""
-def metrik(y, p):
-    pr, rc, f1, _ = precision_recall_fscore_support(y, p, labels=[0, 1, 2], zero_division=0)
-    return {'OA': accuracy_score(y, p), 'kappa': cohen_kappa_score(y, p),
-            'F1_makro': f1_score(y, p, labels=[0, 1, 2], average='macro', zero_division=0),
-            'F1_air': f1[0], 'F1_eg': f1[1], 'F1_kja': f1[2],
-            'recall_air': rc[0], 'recall_eg': rc[1], 'recall_kja': rc[2]}
+from sklearn.metrics import make_scorer
+# Skor validasi silang yang dicatat. Penyetelan memakai F1 makro (refit).
+SKOR = {'F1_makro': 'f1_macro', 'OA': 'accuracy', 'kappa': make_scorer(cohen_kappa_score),
+        **{f'F1_{n}': make_scorer(f1_score, labels=[k], average='macro', zero_division=0)
+           for k, n in [(0, 'air'), (1, 'eg'), (2, 'kja')]}}
 
 y_latih, g_latih, y_uji = latih['label'].values, latih['blok'].values, uji['label'].values
 cv = GroupKFold(n_splits=min(N_FOLD, latih['blok'].nunique()))
-baris, baris_tingkat, prediksi, param_terbaik, model_akhir = [], [], {}, {}, {}
+baris, baris_tingkat, prediksi, param_terbaik, model_akhir, skor_cv = [], [], {}, {}, {}, {}
 mulai = time.time()
 
 for fs, kolom in SET_FITUR.items():
     X_latih, X_uji = latih[kolom].values, uji[kolom].values
     for nama in GRID:
-        gs = GridSearchCV(bangun(nama, SEED_UTAMA), GRID[nama], scoring='f1_macro', cv=cv, n_jobs=-1)
+        t0 = time.time()
+        gs = GridSearchCV(bangun(nama, SEED_UTAMA), GRID[nama], scoring=SKOR, refit='F1_makro',
+                          cv=cv, n_jobs=-1)
         gs.fit(X_latih, y_latih, groups=g_latih)
         param_terbaik[(nama, fs)] = gs.best_params_
+        i = gs.best_index_
+        skor_cv[(nama, fs)] = {**{f'cv_{k}': gs.cv_results_[f'mean_test_{k}'][i] for k in SKOR},
+                               # SD antarlipatan GroupKFold (bukan antarseed)
+                               'cv_F1_makro_sd': gs.cv_results_['std_test_F1_makro'][i],
+                               'waktu_dtk': time.time() - t0}
         for seed in (SEEDS if nama in ACAK else [SEED_UTAMA]):
             m = bangun(nama, seed).set_params(**gs.best_params_).fit(X_latih, y_latih)
             p = m.predict(X_uji)
@@ -348,6 +441,13 @@ for fs, kolom in SET_FITUR.items():
                     baris_tingkat.append({'model': nama, 'fitur': fs, 'tingkat': t, 'n': int(msk.sum()),
                                           **metrik(y_uji[msk.values], p[msk.values])})
         print(f'{fs:6s} {nama:4s} selesai  cv F1={gs.best_score_:.3f}  ({time.time() - mulai:.0f} dtk)')
+
+# Tabel siap salin ke spreadsheet tab 4_ML_CV (urutan baris M01-M25).
+tab_cv = pd.DataFrame([{'id': ID_ML[(m, fs)], 'model': m, 'set_fitur': fs, 'jumlah_fitur': len(SET_FITUR[fs]),
+                        **skor_cv[(m, fs)], 'hiperparameter': str(param_terbaik[(m, fs)])}
+                       for fs in SET_FITUR for m in MODEL_URUT]).set_index('id')
+tab_cv['peringkat_cv'] = tab_cv['cv_F1_makro'].rank(ascending=False, method='min').astype(int)
+tab_cv.round(4).to_csv(f'{OUT_DIR}/e1e2_cv_untuk_spreadsheet.csv')
 
 hasil = pd.DataFrame(baris)
 kolom_m = ['OA', 'kappa', 'F1_makro', 'F1_air', 'F1_eg', 'F1_kja']
@@ -361,15 +461,22 @@ print('Selesai dalam', round(time.time() - mulai), 'detik')
 """)
 
 code(r"""
-# Tabel utama (fitur lengkap) — Tabel IV Naskah 2
+# Tabel utama (fitur lengkap F0123) — Tabel IV Naskah 2
 utama = (hasil[hasil['fitur'] == LENGKAP].groupby('model')[kolom_m].mean()
          .sort_values('F1_makro', ascending=False).round(4))
 utama.index = [NAMA_MODEL[m] for m in utama.index]
 display(utama) if 'display' in globals() else print(utama)
-# Model terbaik dipilih dari skor VALIDASI SILANG pada data latih (GroupKFold per blok),
-# BUKAN dari skor T3, agar data uji tidak ikut menentukan model yang dianalisis lanjut.
-TERBAIK = hasil[hasil['fitur'] == LENGKAP].groupby('model')['cv_F1_makro'].mean().idxmax()
-print('Model terbaik menurut validasi silang (fitur lengkap):', NAMA_MODEL[TERBAIK])
+# Kombinasi model x set fitur terbaik dipilih dari skor VALIDASI SILANG pada data latih
+# (GroupKFold per blok) dari ke-25 kombinasi, BUKAN dari skor T3, agar data uji tidak ikut
+# menentukan model yang dianalisis lanjut.
+urut_cv = tab_cv.sort_values('cv_F1_makro', ascending=False)
+TERBAIK, SET_TERBAIK = urut_cv.iloc[0][['model', 'set_fitur']]
+KEDUA = tuple(urut_cv.iloc[1][['model', 'set_fitur']])           # peringkat 2 menurut CV
+# Pembanding RGB: kombinasi FRGB dengan CV tertinggi.
+RGB_TERBAIK = tuple(urut_cv[urut_cv['set_fitur'] == 'FRGB'].iloc[0][['model', 'set_fitur']])
+KUNCI = (TERBAIK, SET_TERBAIK)
+print(f'Terbaik menurut CV: {NAMA_MODEL[TERBAIK]} + {SET_TERBAIK} ({ID_ML[KUNCI]}); '
+      f'kedua: {KEDUA[0]} + {KEDUA[1]} ({ID_ML[KEDUA]}); RGB terbaik: {RGB_TERBAIK[0]} ({ID_ML[RGB_TERBAIK]})')
 
 # Deteksi overfitting: selisih F1 makro validasi silang (data latih) dan uji (T3).
 # Selisih besar = model terlalu menyesuaikan diri dengan data latih, atau T3 jauh berbeda.
@@ -377,13 +484,13 @@ celah = (hasil.groupby(['fitur', 'model'])[['cv_F1_makro', 'F1_makro']].mean()
               .rename(columns={'cv_F1_makro': 'F1_validasi', 'F1_makro': 'F1_uji'}))
 celah['selisih'] = celah['F1_validasi'] - celah['F1_uji']
 celah = celah.round(4)
-display(celah.loc[LENGKAP]) if 'display' in globals() else print(celah.loc[LENGKAP])
+display(celah) if 'display' in globals() else print(celah)
 celah.to_csv(f'{OUT_DIR}/e1_selisih_validasi_uji.csv')
 
 # Autokorelasi RESIDU (Roberts dkk., 2017): galat prediksi out-of-fold model terbaik pada data latih.
 from sklearn.model_selection import cross_val_predict
-m_cv = bangun(TERBAIK, SEED_UTAMA).set_params(**param_terbaik[(TERBAIK, LENGKAP)])
-p_oof = cross_val_predict(m_cv, latih[SET_FITUR[LENGKAP]].values, y_latih, groups=g_latih, cv=cv, n_jobs=-1)
+m_cv = bangun(TERBAIK, SEED_UTAMA).set_params(**param_terbaik[KUNCI])
+p_oof = cross_val_predict(m_cv, latih[SET_FITUR[SET_TERBAIK]].values, y_latih, groups=g_latih, cv=cv, n_jobs=-1)
 dres = latih[['kode', 'petak', 'x', 'y']].copy(); dres['residu'] = (p_oof != y_latih).astype(float)
 r_res = jangkauan(korelogram(dres, ['residu'])['residu'])
 print(f'Jangkauan autokorelasi residu: {r_res:.0f} m; ukuran blok: {UKURAN_BLOK_M} m ->',
@@ -408,14 +515,14 @@ for nama in GRID:
     lebar = 2.4 if nama == TERBAIK else 1.2
     ax.errorbar(xs, s['mean'], yerr=s['std'].fillna(0), marker=penanda[nama], lw=lebar, capsize=3,
                 label=NAMA_MODEL[nama])
-ax.set_xticks(xs, ['F0\npita', '+F1\nindeks', '+F2\ntekstur, tepi', '+F3\nmorfologi'])
+ax.set_xticks(xs, ['FRGB\nRGB', 'F0\n10 pita', '+F1\nindeks', '+F2\ntekstur, tepi', '+F3\nmorfologi'])
 ax.set_ylabel(f'F1 makro pada {UJI}')
 ax.set_title('Pengaruh penambahan kelompok fitur PCD')
 ax.grid(axis='y', alpha=0.3); ax.legend(fontsize=8, frameon=False, loc='lower right')
 fig.tight_layout(); fig.savefig(f'{OUT_DIR}/gbr_ablasi_fitur.png', dpi=300); plt.show()
 """)
 
-md("## 6. E3 — Uji statistik")
+md("## 6. E3: Uji statistik")
 code(r"""
 def mcnemar(y, pa, pb):
     a_benar, b_benar = pa == y, pb == y
@@ -433,22 +540,25 @@ def holm(p):
         maks = max(maks, (m - i) * p[j]); adj[j] = min(1, maks)
     return adj
 
+# Empat perbandingan yang direncanakan (satu keluarga uji, dikoreksi Holm):
+#   1) terbaik vs kedua (CV)            : apakah pemenang benar-benar lebih baik
+#   2) terbaik vs aturan PCD terbaik    : apakah ML diperlukan
+#   3) set terbaik vs F0 (model sama)   : apakah fitur hasil PCD menambah akurasi
+#   4) set terbaik vs FRGB (model sama) : apakah pita NIR/SWIR diperlukan
+P_UJI = {KUNCI: prediksi[KUNCI], KEDUA: prediksi[KEDUA], ('PCD', PCD_TERBAIK): pred_pcd}
+rencana = [('Terbaik vs kedua', KEDUA), ('Terbaik vs PCD terbaik', ('PCD', PCD_TERBAIK))]
+for fs in ['F0', 'FRGB']:
+    if SET_TERBAIK != fs:
+        P_UJI[(TERBAIK, fs)] = prediksi[(TERBAIK, fs)]
+        rencana.append((f'Set terbaik vs {fs} (model sama)', (TERBAIK, fs)))
+    else:
+        print(f'Perbandingan set terbaik vs {fs} dilewati: set terbaik adalah {fs}.')
+nama_kunci = lambda k: f'PCD {k[1]}' if k[0] == 'PCD' else f'{k[0]} {k[1]} ({ID_ML[k]})'
 uji_baris = []
-for nama in GRID:                                         # terbaik vs model lain (fitur lengkap)
-    if nama != TERBAIK:
-        n01, n10, z2, p = mcnemar(y_uji, prediksi[(TERBAIK, LENGKAP)], prediksi[(nama, LENGKAP)])
-        uji_baris.append({'perbandingan': f'{TERBAIK} vs {nama} ({LENGKAP})', 'benar_A_salah_B': n01,
-                          'salah_A_benar_B': n10, 'z2': z2, 'p': p})
-for fs in SET_FITUR:                                      # ablasi pada model terbaik
-    if fs != LENGKAP:
-        n01, n10, z2, p = mcnemar(y_uji, prediksi[(TERBAIK, LENGKAP)], prediksi[(TERBAIK, fs)])
-        uji_baris.append({'perbandingan': f'{TERBAIK}: {LENGKAP} vs {fs}', 'benar_A_salah_B': n01,
-                          'salah_A_benar_B': n10, 'z2': z2, 'p': p})
-ujiM = pd.DataFrame(uji_baris)
-ujiM['p_holm'] = holm(ujiM['p'])
-ujiM['bermakna_5%'] = ujiM['p_holm'] < 0.05
-display(ujiM.round(4)) if 'display' in globals() else print(ujiM.round(4))
-ujiM.to_csv(f'{OUT_DIR}/e3_uji_mcnemar.csv', index=False)
+for label, b in rencana:
+    n01, n10, z2, p = mcnemar(y_uji, P_UJI[KUNCI], P_UJI[b])
+    uji_baris.append({'perbandingan': label, 'model_A': nama_kunci(KUNCI), 'model_B': nama_kunci(b),
+                      'n01_A_benar_B_salah': n01, 'n10_A_salah_B_benar': n10, 'z2': z2, 'p': p})
 """)
 
 code(r"""
@@ -458,26 +568,50 @@ blok_uji = uji['blok'].values
 daftar_blok = np.unique(blok_uji)
 indeks_blok = {b: np.where(blok_uji == b)[0] for b in daftar_blok}
 f1m = lambda y, p: f1_score(y, p, labels=[0, 1, 2], average='macro', zero_division=0)
-boot = {nama: [] for nama in GRID}
+# Dibootstrap: kelima model pada set terbaik + semua prediksi yang dipakai uji McNemar + RGB terbaik.
+for m in MODEL_URUT:
+    P_UJI.setdefault((m, SET_TERBAIK), prediksi[(m, SET_TERBAIK)])
+P_UJI.setdefault(RGB_TERBAIK, prediksi[RGB_TERBAIK])
+boot = {k: [] for k in P_UJI}
 for _ in range(N_BOOT):
     idx = np.concatenate([indeks_blok[b] for b in rng.choice(daftar_blok, len(daftar_blok), replace=True)])
-    for nama in GRID:
-        boot[nama].append(f1m(y_uji[idx], prediksi[(nama, LENGKAP)][idx]))
-ci = pd.DataFrame({nama: {'F1_makro': f1m(y_uji, prediksi[(nama, LENGKAP)]),
-                          'CI95_bawah': np.percentile(v, 2.5), 'CI95_atas': np.percentile(v, 97.5)}
-                   for nama, v in boot.items()}).T.sort_values('F1_makro', ascending=False).round(4)
-urut_cv = hasil[hasil['fitur'] == LENGKAP].groupby('model')['cv_F1_makro'].mean().sort_values(ascending=False)
-kedua = [m for m in urut_cv.index if m != TERBAIK][0]   # peringkat kedua menurut validasi silang
-selisih = np.array(boot[TERBAIK]) - np.array(boot[kedua])
-print(f'Selisih F1 makro {TERBAIK} - {kedua}: {selisih.mean():.4f} '
-      f'(CI95 {np.percentile(selisih, 2.5):.4f} s.d. {np.percentile(selisih, 97.5):.4f})')
+    for k, p in P_UJI.items():
+        boot[k].append(f1m(y_uji[idx], p[idx]))
+ci = pd.DataFrame({nama_kunci(k): {'F1_makro': f1m(y_uji, P_UJI[k]),
+                                   'CI95_bawah': np.percentile(v, 2.5), 'CI95_atas': np.percentile(v, 97.5)}
+                   for k, v in boot.items()}).T.sort_values('F1_makro', ascending=False).round(4)
+# Selisih F1 makro (A - B) dan CI-nya untuk setiap perbandingan McNemar.
+for r, (label, b) in zip(uji_baris, rencana):
+    d = np.array(boot[KUNCI]) - np.array(boot[b])
+    r.update({'dF1_makro': f1m(y_uji, P_UJI[KUNCI]) - f1m(y_uji, P_UJI[b]),
+              'dF1_CI95_bawah': np.percentile(d, 2.5), 'dF1_CI95_atas': np.percentile(d, 97.5)})
+ujiM = pd.DataFrame(uji_baris)
+ujiM['p_holm'] = holm(ujiM['p'])
+ujiM['bermakna_5%'] = ujiM['p_holm'] < 0.05
+display(ujiM.round(4)) if 'display' in globals() else print(ujiM.round(4))
+ujiM.to_csv(f'{OUT_DIR}/e3_uji_mcnemar.csv', index=False)
 display(ci) if 'display' in globals() else print(ci)
+
+# Ringkasan T3 untuk spreadsheet tab 5_Uji_T3 (empat baris tetap).
+def baris_t3(peran, k, skor_pilih):
+    return {'peran': peran, 'id': f'PCD {k[1]}' if k[0] == 'PCD' else ID_ML[k], 'skor_pemilihan': skor_pilih,
+            **metrik(y_uji, P_UJI[k]), 'CI95_bawah': np.percentile(boot[k], 2.5),
+            'CI95_atas': np.percentile(boot[k], 97.5)}
+t3 = pd.DataFrame([
+    baris_t3('ML terbaik (peringkat CV 1)', KUNCI, tab_cv.loc[ID_ML[KUNCI], 'cv_F1_makro']),
+    baris_t3('ML kedua (peringkat CV 2)', KEDUA, tab_cv.loc[ID_ML[KEDUA], 'cv_F1_makro']),
+    baris_t3('PCD terbaik (F1 latih)', ('PCD', PCD_TERBAIK), e0.loc[PCD_TERBAIK, 'latih_F1_makro']),
+    baris_t3('ML terbaik dengan FRGB', RGB_TERBAIK, tab_cv.loc[ID_ML[RGB_TERBAIK], 'cv_F1_makro']),
+]).set_index('peran')
+t3['selisih_pemilihan_T3'] = t3['skor_pemilihan'] - t3['F1_makro']
+t3.round(4).to_csv(f'{OUT_DIR}/e3_uji_t3_untuk_spreadsheet.csv')
+display(t3.round(4)) if 'display' in globals() else print(t3.round(4))
 ci.to_csv(f'{OUT_DIR}/e3_bootstrap_ci.csv')
 """)
 
-md("## 7. E4 — Matriks konfusi, kepentingan fitur, uji silang tanggal, pembanding PCD")
+md("## 7. E4: Matriks konfusi, kepentingan fitur, uji silang tanggal, pembanding PCD")
 code(r"""
-p_best = prediksi[(TERBAIK, LENGKAP)]
+p_best = prediksi[KUNCI]
 cm = confusion_matrix(y_uji, p_best, labels=[0, 1, 2])
 tabel_cm = pd.DataFrame(cm, index=[f'Ref: {KELAS[k]}' for k in range(3)],
                         columns=[f'Pred: {KELAS[k]}' for k in range(3)])
@@ -501,8 +635,8 @@ fig.tight_layout(); fig.savefig(f'{OUT_DIR}/gbr_matriks_konfusi.png', dpi=300); 
 
 code(r"""
 # Permutation importance pada data uji (penurunan F1 makro), per kelompok dan per fitur
-m_best = model_akhir[(TERBAIK, LENGKAP)]
-kolom = SET_FITUR[LENGKAP]
+m_best = model_akhir[KUNCI]
+kolom = SET_FITUR[SET_TERBAIK]
 X_uji_df = uji[kolom].reset_index(drop=True)
 dasar = f1m(y_uji, m_best.predict(X_uji_df.values))
 rng = np.random.RandomState(SEED_UTAMA)
@@ -516,7 +650,9 @@ def turun(cols):
         nilai.append(dasar - f1m(y_uji, m_best.predict(X.values)))
     return np.mean(nilai), np.std(nilai)
 
-imp_kel = pd.DataFrame({k: dict(zip(['penurunan_F1', 'sd'], turun(v))) for k, v in KELOMPOK.items()}).T
+kel_ada = {k: [c for c in v if c in kolom] for k, v in KELOMPOK.items()}
+kel_ada = {k: v for k, v in kel_ada.items() if v}          # hanya kelompok yang ada di set terbaik
+imp_kel = pd.DataFrame({k: dict(zip(['penurunan_F1', 'sd'], turun(v))) for k, v in kel_ada.items()}).T
 imp_fit = pd.DataFrame({c: dict(zip(['penurunan_F1', 'sd'], turun([c]))) for c in kolom}).T
 imp_fit = imp_fit.sort_values('penurunan_F1', ascending=False)
 imp_kel.round(4).to_csv(f'{OUT_DIR}/e4_kepentingan_kelompok.csv'); imp_fit.round(4).to_csv(f'{OUT_DIR}/e4_kepentingan_fitur.csv')
@@ -550,9 +686,9 @@ if len(SAMA) >= 2:
             ub = df[(df['kode'] == b) & kelas_ok]
             if la['label'].nunique() < 3:
                 continue
-            m = bangun(TERBAIK, SEED_UTAMA).set_params(**param_terbaik[(TERBAIK, LENGKAP)])
-            m.fit(la[SET_FITUR[LENGKAP]].values, la['label'].values)
-            silang.append({'latih': a, 'uji': b, **metrik(ub['label'].values, m.predict(ub[SET_FITUR[LENGKAP]].values))})
+            m = bangun(TERBAIK, SEED_UTAMA).set_params(**param_terbaik[KUNCI])
+            m.fit(la[SET_FITUR[SET_TERBAIK]].values, la['label'].values)
+            silang.append({'latih': a, 'uji': b, **metrik(ub['label'].values, m.predict(ub[SET_FITUR[SET_TERBAIK]].values))})
 silang.append({'latih': '+'.join(LATIH), 'uji': UJI, **metrik(y_uji, p_best)})
 silang = pd.DataFrame(silang).round(4)
 display(silang) if 'display' in globals() else print(silang)
@@ -565,7 +701,7 @@ y_air = (y_uji == 0).astype(int)
 banding = pd.DataFrame([
     {'metode': 'Ambang indeks (PCD, tanpa pascaproses)', **dict(zip(['presisi', 'recall', 'F1'],
         precision_recall_fscore_support(y_air, uji['air_pcd'].values.astype(int), average='binary', zero_division=0)[:3]))},
-    {'metode': f'{NAMA_MODEL[TERBAIK]} (F0-F3)', **dict(zip(['presisi', 'recall', 'F1'],
+    {'metode': f'{NAMA_MODEL[TERBAIK]} ({SET_TERBAIK})', **dict(zip(['presisi', 'recall', 'F1'],
         precision_recall_fscore_support(y_air, (p_best == 0).astype(int), average='binary', zero_division=0)[:3]))},
 ]).round(4)
 cakupan = (uji['waduk_pcd'] == 1).mean()
@@ -586,7 +722,7 @@ print('Luas dari peta adalah luas terpetakan, bukan estimasi luas tak bias (Olof
 """)
 
 md(r"""
-## 8. E5 — Pengaruh petak latih tambahan
+## 8. E5: Pengaruh petak latih tambahan
 Model terbaik (hiperparameter sama) dilatih dua kali: (a) hanya petak A–C pada T1, T2; (b) ditambah petak D, E, F pada D1, D2, D3. Keduanya diuji di T3. Bila (b) lebih baik dan bermakna, keragaman lokasi dan waktu terbukti membantu generalisasi.
 """)
 code(r"""
@@ -594,17 +730,26 @@ tambahan_ada = latih['petak'].isin(PETAK_TAMBAHAN).any()
 if not tambahan_ada:
     print('Data latih tidak memuat petak tambahan; E5 dilewati.')
 else:
-    kol = SET_FITUR[LENGKAP]
+    kol = SET_FITUR[SET_TERBAIK]
     hasil_e5, pred_e5 = [], {}
     for nama_set, bagian in [('A-C saja', latih[~latih['petak'].isin(PETAK_TAMBAHAN)]), ('A-C + D-F', latih)]:
         for seed in (SEEDS if TERBAIK in ACAK else [SEED_UTAMA]):
-            m = bangun(TERBAIK, seed).set_params(**param_terbaik[(TERBAIK, LENGKAP)])
+            m = bangun(TERBAIK, seed).set_params(**param_terbaik[KUNCI])
             m.fit(bagian[kol].values, bagian['label'].values)
             p = m.predict(uji[kol].values)
             hasil_e5.append({'data_latih': nama_set, 'seed': seed, 'n_latih': len(bagian), **metrik(y_uji, p)})
             if seed == SEED_UTAMA:
                 pred_e5[nama_set] = p
-    e5 = pd.DataFrame(hasil_e5).groupby('data_latih')[['n_latih'] + kolom_m].agg(['mean', 'std']).round(4)
+        # Skor validasi silang skenario ini (GroupKFold blok, hiperparameter sama).
+        from sklearn.model_selection import cross_val_score
+        cv_e5 = GroupKFold(n_splits=min(N_FOLD, bagian['blok'].nunique()))
+        skor = cross_val_score(bangun(TERBAIK, SEED_UTAMA).set_params(**param_terbaik[KUNCI]),
+                               bagian[kol].values, bagian['label'].values, groups=bagian['blok'].values,
+                               cv=cv_e5, scoring='f1_macro', n_jobs=-1)
+        for r in hasil_e5:
+            if r['data_latih'] == nama_set:
+                r['cv_F1_makro'] = skor.mean()
+    e5 = pd.DataFrame(hasil_e5).groupby('data_latih')[['n_latih', 'cv_F1_makro'] + kolom_m].agg(['mean', 'std']).round(4)
     n01, n10, z2, pval = mcnemar(y_uji, pred_e5['A-C + D-F'], pred_e5['A-C saja'])
     print(f'McNemar (A-C + D-F) vs (A-C saja): benar_A_salah_B={n01}, salah_A_benar_B={n10}, p={pval:.4f}')
     display(e5) if 'display' in globals() else print(e5)
@@ -614,14 +759,17 @@ else:
 md("## 9. Simpan model dan ringkasan")
 code(r"""
 import joblib
-joblib.dump({'model': m_best, 'fitur': SET_FITUR[LENGKAP], 'kelas': KELAS, 'log1p': ['luas_komponen', 'jarak_air']},
+joblib.dump({'model': m_best, 'fitur': SET_FITUR[SET_TERBAIK], 'kelas': KELAS, 'log1p': ['luas_komponen', 'jarak_air']},
             f'{OUT_DIR}/model_terbaik_{TERBAIK}.joblib')
 ringkas = {
     'lingkungan': LINGKUNGAN, 'versi_pustaka': VERSI, 'versi_dataset': VERSI_DATASET,
     'latih': LATIH, 'uji': UJI, 'uji_coba': bool(UJI_COBA), 'min_sepakat_latih': MIN_SEPAKAT_LATIH, 'buang_eg_petak_c': BUANG_EG_PETAK_C,
     'n_latih': int(len(latih)), 'n_uji': int(len(uji)), 'model_terbaik': TERBAIK,
     'hiperparameter_terbaik': {f'{k[0]}|{k[1]}': {kk: str(vv) for kk, vv in v.items()} for k, v in param_terbaik.items()},
-    'f1_makro_terbaik': float(ci.loc[TERBAIK, 'F1_makro']),
+    'set_fitur_terbaik': SET_TERBAIK, 'id_terbaik': ID_ML[KUNCI],
+    'cv_f1_makro_terbaik': float(tab_cv.loc[ID_ML[KUNCI], 'cv_F1_makro']),
+    'f1_makro_terbaik_T3': float(f1m(y_uji, P_UJI[KUNCI])),
+    'pcd_terbaik': PCD_TERBAIK, 'ambang_pcd': {k: float(v) for k, v in AMBANG_PCD.items()},
 }
 json.dump(ringkas, open(f'{OUT_DIR}/ringkasan.json', 'w'), indent=2, ensure_ascii=False)
 print('Tersimpan di', OUT_DIR); print(sorted(os.listdir(OUT_DIR)))
@@ -639,7 +787,7 @@ else:
     w = pd.read_csv(p_waduk)
     for c in ['luas_komponen', 'jarak_air']:
         w[c] = np.log1p(w[c].clip(lower=0))
-    w['prediksi'] = m_best.predict(w[SET_FITUR[LENGKAP]].values)
+    w['prediksi'] = m_best.predict(w[SET_FITUR[SET_TERBAIK]].values)
     luas = w['prediksi'].map(KELAS).value_counts().mul(0.04).round(1).rename('luas_ha')
     display(luas.to_frame()) if 'display' in globals() else print(luas)
     luas.to_csv(f'{OUT_DIR}/luas_kelas_seluruh_waduk_{UJI}.csv')
