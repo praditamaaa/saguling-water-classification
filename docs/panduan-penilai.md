@@ -4,7 +4,7 @@
 
 Data referensi (ground truth) penelitian ini dibuat oleh lima penilai (dua anggota tim dan tiga penilai luar tim) dan ditetapkan dengan voting mayoritas, mengikuti praktik baik penilaian akurasi yang sudah terbit. Kualitasnya diukur dengan angka, bukan diasumsikan.
 
-Referensi adalah kunci jawaban untuk menilai 12 konfigurasi segmentasi. Karena dibuat manusia, referensi bisa keliru. Tujuan protokol ini adalah membuat kekeliruan itu kecil, terukur, dan bisa diperiksa orang lain.
+Referensi adalah kunci jawaban untuk menilai 26 konfigurasi segmentasi. Karena dibuat manusia, referensi bisa keliru. Tujuan protokol ini adalah membuat kekeliruan itu kecil, terukur, dan bisa diperiksa orang lain.
 
 | Keputusan | Alasan | Rujukan dan bagiannya |
 | --- | --- | --- |
@@ -265,7 +265,24 @@ Bagian ini menggantikan aturan sebelumnya bila bertentangan.
 - Gambar **12 kombinasi**: petak A, B, C pada T1, T2, T3; petak D pada D1, E pada D2, F pada D3. Nama lapisan mengikuti pola `air_E_D2`, `eg_E_D2`, `kja_E_D2`.
 - Petak D dan F adalah kawasan eceng gondok; petak E adalah kawasan KJA. Tetap gambar semua objek yang ada, bukan hanya objek sasaran petaknya.
 - Hanya citra Sentinel-2 yang dipakai di petak uji. Basemap satelit resolusi tinggi tidak dinyalakan; peta dasar sudah diatur ke ROADMAP.
-- KJA digambar sebagai **blok kawasan**, bukan per petak keramba.
-- Eceng gondok di dalam blok KJA tidak perlu digambar (dihitung KJA).
-- Eceng gondok tipis: [isi aturan hasil kalibrasi, misalnya digambar bila tampak merah di komposit NIR pada sedikitnya 2 × 2 piksel 10 m yang berdekatan].
+- KJA digambar sebagai **blok kawasan**, bukan per petak keramba (aturan rinci di bawah).
+- Eceng gondok di dalam blok KJA tidak perlu digambar (dihitung KJA). Eceng gondok di luar tepi blok digambar sebagai eceng gondok bila hijau/merah vegetasinya menutupi lebih dari separuh piksel 20 m di Sentinel-2 itu sendiri.
+- Eceng gondok tipis: ikuti aturan piksel dominan di bagian 6 (masuk bila menutupi lebih dari separuh piksel 20 m). Bila sesi kalibrasi menyepakati aturan yang lebih rinci, tulis di sini sebelum digitasi dimulai dan catat di Excel Tabel 7a.
+
+**Aturan digitasi KJA (v2)**
+
+Satu petak keramba berukuran beberapa meter, jauh lebih kecil dari piksel 20 m. Model memprediksi per piksel 20 m dan poligon referensi juga dijadikan raster 20 m, sehingga batas unit keramba tidak pernah terbaca. Menggambar unit satu per satu hanya menambah tebakan dan menurunkan kesepakatan. Sebaliknya, satu poligon besar yang membungkus seluruh kawasan ikut memasukkan lorong air terbuka, sehingga model belajar bahwa air gelap adalah KJA. Karena itu unit yang dipakai adalah blok.
+
+| Aturan | Isi |
+| --- | --- |
+| Unit | Satu poligon per **blok**: gugus yang tampak sebagai pola kotak abu-abu terang bertekstur. Batas ditarik di tepi luar pola itu. |
+| Piksel dominan | Piksel 20 m masuk KJA bila lebih dari separuh isinya keramba. Karena raster memakai titik tengah piksel, cukup pastikan titik tengah piksel seperti itu berada di dalam poligon. |
+| Lorong air | Lorong yang lebarnya kurang dari 2 piksel (< 40 m) ikut blok, karena piksel di lorong sempit selalu campuran. Lorong ≥ 40 m dikeluarkan dan menjadi air. Aturan ini menggantikan batas 20 m di bagian 6 untuk digitasi v2. |
+| Tampilan | Perbesar sampai kotak piksel 20 m terlihat. Jangan menilai dari tampilan yang dihaluskan. |
+| Basemap | Tetap mati. Citra tajam hanya dipakai saat kalibrasi; tanggalnya berbeda dan KJA bisa sudah pindah atau bertambah. |
+| Tepi yang ragu | Gambar penilaian terbaik yang jujur, jangan bermain aman. Piksel tepi yang benar-benar ambigu tersaring otomatis karena data latih hanya memakai piksel yang disepakati ≥ 4 dari 5 penilai. |
+
+Sebelum digitasi penuh, kelima penilai berlatih bersama di satu blok KJA di luar petak, membandingkan hasil, lalu menyepakati contoh kasus sulit (di mana lorong dipotong, piksel tepi mana yang masuk, eceng gondok di sela keramba). Tangkapan layar contoh itu disimpan sebagai kunci interpretasi.
+
+Konsekuensinya, luas KJA yang dilaporkan adalah **luas piksel 20 m yang didominasi KJA**, bukan luas fisik atau jumlah petak keramba.
 - Anggota tim (p1, p2) menyelesaikan digitasi v2 sebelum Langkah 07 dijalankan.

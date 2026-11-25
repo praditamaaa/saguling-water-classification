@@ -32,20 +32,25 @@ No  File                                          Mengisi dari        Menghasilk
 06a 06a_kalibrasi_p1.js ... p5.js (5 file)        PUSAT latihan       tidak ada Asset; luas latihan di Console
 06b 06b_digitasi_p1.js  ... p5.js (5 file)        versi petak         Asset saguling_ref_<petak>_<T>_<pN>_v1
                                                                       (6 per penilai, 30 seluruhnya)
-05b 05b_memilih_tanggal_uji_T3.js                 versi petak         T3 (kamu pilih); Asset saguling_tanggal_uji_<v>
-                                                                      (T3 + poligon PLTS) — untuk Naskah 2
-06b 06b_digitasi_p1_v2.js ... p5_v2.js (5 file)   versi petak, uji    Asset saguling_ref_<petak>_<T>_pN_v2
-                                                                      (T1, T2, dan T3) — digitasi ulang
-06c 06c_voting_lima_penilai.js                    Asset 06b           Asset saguling_ref_<petak>_<T>_vote_<v> (6 atau 9);
+05b 05b_memilih_tanggal_uji_T3_dan_petak_         versi petak         T3, D1, D2, D3 dan petak D, E, F (kamu pilih);
+     tambahan.js
+     MODE 'cari' -> 'simpan'                                          CSV 05b_kandidat_tanggal_<v>;
+                                                                      Asset saguling_tambahan_<v> — untuk Naskah 2
+06b 06b_digitasi_p1_v2.js ... p5_v2.js (5 file)   versi petak,        Asset saguling_ref_<petak>_<T>_pN_v2
+                                                  tambahan            (12 per penilai: A–C x T1,T2,T3; D-D1, E-D2, F-D3)
+06c 06c_voting_lima_penilai.js                    Asset 06b           Asset saguling_ref_<petak>_<T>_vote_<v> (12);
                                                                       CSV 06c_kesepakatan_vote_<v>,
                                                                       CSV 06c_iou_pasangan_vote_<v>
-07  07_menyegmentasi_12_konfigurasi.js            versi petak         Asset saguling_peta_T1_<v>, saguling_peta_T2_<v>;
-     MODE 'setel' -> 'ekspor' -> 'periksa'                            CSV 07_ambang_otomatis_<v>
-08  08_mengevaluasi_akurasi.js                    versi petak, ref    CSV 08_evaluasi_<v ref>_<v peta> (432 baris);
-                                                  vote, dan peta      PNG Gambar 2; tabel silsilah versi
-09  09_membuat_tabel_hasil.py                     CSV 07, 08, 06c     tabel_hasil.md (Tabel VIII–XIII)
-10  10_membuat_dataset_ml.js                     vote v2, konfigurasi CSV dataset_<T>_<v> (T1, T2, T3) dan
-                                                  terbaik (Langkah 08) waduk_<T>_<v> ke Drive/PCD_Saguling
+07  07_menyegmentasi_26_konfigurasi.js            versi petak,        Asset saguling_peta_<T>_<v> (T1, T2, T3, D1-D3;
+     MODE 'setel' -> 'ekspor' -> 'periksa'        tambahan            26 band K1-K26); CSV 07_ambang_otomatis_<v>
+08  08_mengevaluasi_akurasi.js                    versi petak, ref    CSV 08_evaluasi_<v ref>_<v peta> (1872 baris,
+                                                  vote, tambahan,     kolom peran latih/uji); PNG Gambar 2;
+                                                  dan peta            tabel silsilah versi
+09  09_membuat_tabel_hasil.py                     CSV 07, 08, 06c     tabel_hasil.md (Tabel VIII–XIV);
+                                                                      09_pemilihan_konfigurasi.csv (konfigurasi
+                                                                      terbaik = peringkat 1 kolom latih)
+10  10_membuat_dataset_ml.js                     vote v2, konfigurasi CSV dataset_<T>_<v> (T1,T2,T3,D1-D3) dan
+                                                  terbaik (Langkah 09) waduk_<T>_<v> ke Drive/PCD_Saguling
      MODE 'periksa' -> 'ekspor' -> 'ekspor_waduk'
 11  ml/11_pelatihan_model.ipynb                  CSV Langkah 10       hasil_ml/ (tabel, gambar, model) —
                                                                       dijalankan di Kaggle atau Colab
@@ -57,8 +62,9 @@ langkah 06–08 membacanya dari Asset saguling_petak_<v>.
 DIGITASI ULANG v2 (20 November 2026)
   Setelah kalibrasi ulang dengan kunci interpretasi citra tajam, kelima
   penilai menggambar ulang di file BARU 06b_digitasi_pN_v2.js (bukan file
-  v1), untuk T1, T2, dan T3 sekaligus. Jalankan 05b lebih dulu agar T3
-  sudah ada. Asset v1 tidak dihapus.
+  v1): petak A–C pada T1, T2, T3; D pada D1; E pada D2; F pada D3. Jalankan
+  05b (mode 'simpan') lebih dulu agar T3, D1–D3 dan petak D–F sudah ada.
+  Asset v1 tidak dihapus.
 
 LIMA PENILAI (lihat dokumen Panduan Penilai)
   Langkah 06a dan 06b disediakan lima file, satu per penilai (p1, p2 =
@@ -84,9 +90,10 @@ Ada empat jenis versi, masing-masing ditulis oleh satu langkah:
   VERSI_REF       Langkah 06b    Langkah 06c (sebagai VERSI_PENILAI)
                   ('pN_v1')
   VERSI_VOTE      Langkah 06c    Langkah 08 (sebagai VERSI_REF = 'vote_v2'), 10
-  VERSI_UJI       Langkah 05b    Langkah 06b v2, 10
+  VERSI_TAMBAHAN  Langkah 05b    Langkah 06b v2, 06c, 10
   VERSI_DATASET   Langkah 10     notebook 11 (nama CSV)
-  VERSI_PETA      Langkah 07     Langkah 07 (periksa), 08
+  VERSI_PETA      Langkah 07     Langkah 07 (periksa), 08, 10 (cek konsistensi)
+                                 v1 = 12 konfigurasi (arsip); v2 = 26 konfigurasi
 
 Cara mengulang sebuah langkah:
   a. Naikkan versi yang DITULIS langkah itu (misal VERSI_PETAK 'v1' -> 'v2').
@@ -104,7 +111,7 @@ Apa yang ikut diulang bila sesuatu diganti:
   Lokasi petak (03/04)       05, 06b (petak yang pindah  peta 07 tidak perlu diulang (mencakup seluruh
                              saja), 06c, 08              waduk); cek apakah petak baru sempat terlihat
                                                          saat menyetel parameter
-  Parameter segmentasi (07)  07 ekspor, 08               —
+  Parameter segmentasi (07)  07 ekspor, 08, 09, 10        konfigurasi terbaik bisa berubah
   Gambar satu penilai (06b)  06b penilai itu, 06c, 08    penilai itu memakai 'pN_v2'; kelima penilai
                                                          harus memakai versi yang sama di 06c, jadi
                                                          penilai lain cukup mengekspor ulang sebagai
@@ -140,7 +147,14 @@ sebelum menjalankan langkah yang memakai hasilnya.
                              -> sudah diperbaiki di Langkah 02; bila muncul
                                 di skrip lain, beri fitur geometri (AOI).
 - "Computation timed out"    -> perbesar zoom peta, atau jalankan ulang.
+- "Too many concurrent aggregations"
+                             -> terlalu banyak reduceRegion dihitung sekaligus
+                                untuk Console. Skrip 05b, 06c, 07, 08, dan 10
+                                sudah dibatasi; bila tetap muncul, kecilkan
+                                TAHUN_TAMPIL (05b) atau PETAK_KODE (06c), lalu
+                                ambil tabel lengkap dari CSV di tab Tasks.
 - Ambang bernilai -9         -> pita Canny kosong: turunkan TAU_C atau
                                 perlebar RB_PX di Langkah 07 mode 'setel'.
+- "TERBAIK tidak dikenal" (10) -> ambang 'tetap' hanya untuk NDWI, MNDWI, NDVI.
 Skrip ini belum pernah dijalankan di akun kalian. Bila muncul error lain,
 salin pesan error lengkap dari Console.

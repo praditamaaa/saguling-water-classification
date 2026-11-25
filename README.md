@@ -2,7 +2,7 @@
 
 Tugas besar mata kuliah Pengolahan Citra Digital (PCD), D4 Teknik Informatika, Politeknik Negeri Bandung.
 
-Penelitian ini menguji seberapa andal metode segmentasi air yang sudah terbit (indeks NDWI dan MNDWI dengan ambang tetap, Otsu, dan Canny–Otsu, ditambah morfologi) ketika permukaan waduk tertutup eceng gondok dan keramba jaring apung (KJA). Data: citra Sentinel-2 di Google Earth Engine (GEE).
+Penelitian ini menguji seberapa andal metode segmentasi air yang sudah terbit (transformasi satu kanal NDWI, MNDWI, NDVI, grayscale RGB, dan PCA1 dengan ambang tetap, Otsu, dan Canny–Otsu, ditambah morfologi) ketika permukaan waduk tertutup eceng gondok dan keramba jaring apung (KJA). Fitur hasil pengolahan citra itu lalu dipakai machine learning untuk memisahkan air, eceng gondok, dan KJA. Data: citra Sentinel-2 di Google Earth Engine (GEE).
 
 **Tim:** Muhammad Nabil Syauqi Rasyiq – 241524018, Praditama Ajmal Hasan – 241524023
 
@@ -12,7 +12,7 @@ PLN Indonesia Power dan Pemkab Bandung Barat mengendalikan eceng gondok di Sagul
 
 ## Rumusan masalah
 
-1. Seberapa akurat 12 konfigurasi segmentasi pada air terbuka (titik A) dibandingkan akurasi yang dilaporkan jurnal?
+1. Seberapa akurat 26 konfigurasi segmentasi pada air terbuka (titik A) dibandingkan akurasi yang dilaporkan jurnal?
 2. Seberapa besar akurasi dan luas waduk turun pada permukaan yang tertutup eceng gondok (titik B) dan keramba (titik C)?
 3. Apakah closing dan hole filling memulihkan hasil, dan apakah konfigurasi terbaik tetap sama di ketiga titik?
 
@@ -20,7 +20,7 @@ PLN Indonesia Power dan Pemkab Bandung Barat mengendalikan eceng gondok di Sagul
 
 | Komponen | Isi | Rujukan utama |
 | --- | --- | --- |
-| Indeks | NDWI, MNDWI | Du dkk. (2016) |
+| Transformasi satu kanal | NDWI, MNDWI, NDVI, grayscale (RGB), PCA1 | Du dkk. (2016); Gonzalez & Woods (2018) |
 | Ambang | Tetap 0, Otsu global, Canny–Otsu | Du dkk. (2016); Donchyts dkk. (2016); Markert dkk. (2024) |
 | Pascaproses | Tanpa, atau closing + hole filling | Soille (2003); Gonzalez & Woods (2018) |
 | Titik uji | A air terbuka, B eceng gondok, C KJA; petak 1 × 1 km | Chuzaimah dkk. (2025); Ji dkk. (2009) |
@@ -28,7 +28,7 @@ PLN Indonesia Power dan Pemkab Bandung Barat mengendalikan eceng gondok di Sagul
 | Referensi | Lima penilai, voting minimal 3 dari 5 | Stehman & Foody (2019); Olofsson dkk. (2014) |
 | Evaluasi | IoU, F1, bias luas, Spearman ρ, per tingkat kesepakatan | Olofsson dkk. (2014) |
 
-12 konfigurasi = 2 indeks × 3 ambang × 2 pascaproses. Alasan tiap keputusan ada di [docs/laporan/](docs/laporan/) dan [docs/panduan-penilai.md](docs/panduan-penilai.md).
+26 konfigurasi = (3 indeks ternormalisasi × 3 ambang + 2 transformasi lain × 2 ambang) × 2 pascaproses; ambang tetap 0 hanya untuk indeks ternormalisasi. Konfigurasi terbaik dipilih dari petak dan tanggal latih, bukan dari tanggal uji T3. Alasan tiap keputusan ada di [docs/laporan/](docs/laporan/) dan [docs/panduan-penilai.md](docs/panduan-penilai.md).
 
 ## Alur langkah
 
@@ -38,7 +38,7 @@ flowchart LR
   B --> C["06a<br/>Kalibrasi<br/>penilai"]
   C --> D["06b<br/>Digitasi<br/>5 penilai"]
   D --> E["06c<br/>Voting dan<br/>kesepakatan"]
-  B --> F["07<br/>Segmentasi<br/>12 konfigurasi"]
+  B --> F["07<br/>Segmentasi<br/>26 konfigurasi"]
   E --> G["08<br/>Evaluasi<br/>akurasi"]
   F --> G
   G --> H["09<br/>Tabel hasil<br/>naskah"]
@@ -74,11 +74,11 @@ presentasi/ PDF deck tiap presentasi progres
 4. Unduh CSV dari Google Drive (folder `PCD_Saguling`) ke `data/`, lalu:
 
 ```bash
-python python/09_membuat_tabel_hasil.py data/08_evaluasi_vote_v1_v1.csv data/07_ambang_otomatis_v1.csv \
-    data/06c_kesepakatan_vote_v1.csv data/06c_iou_pasangan_vote_v1.csv
+python python/09_membuat_tabel_hasil.py data/08_evaluasi_vote_v2_v2.csv data/07_ambang_otomatis_v2.csv \
+    data/06c_kesepakatan_vote_v2.csv data/06c_iou_pasangan_vote_v2.csv
 ```
 
-Hasilnya `tabel_hasil.md`; pindahkan ke `hasil/`.
+Hasilnya `tabel_hasil.md` dan `09_pemilihan_konfigurasi.csv` (Tabel XIV: konfigurasi terbaik untuk Langkah 10); pindahkan ke `hasil/`.
 
 5. Machine learning: jalankan `gee/10_membuat_dataset_ml.js` (mode `periksa`, lalu `ekspor`, lalu `ekspor_waduk`), kemudian buka `ml/11_pelatihan_model.ipynb`:
    - **Kaggle**: *New Notebook* → *File* → *Import Notebook*, unggah CSV `dataset_*` dan `waduk_*` sebagai Dataset (*Add Input*), lalu *Run All*.
