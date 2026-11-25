@@ -55,7 +55,7 @@
 // ---------------------------------------------------------------------
 // 0. PARAMETER
 // ---------------------------------------------------------------------
-var MODE = 'cari';               // 'cari' | 'simpan'
+var MODE = 'simpan';               // 'cari' | 'simpan'
 var ASSET = 'projects/earth-engine-511102/assets/';
 var VERSI_PETAK    = 'v1';       // dibaca (Langkah 05)
 var VERSI_TAMBAHAN = 'v1';       // ditulis langkah ini
@@ -63,23 +63,23 @@ var VERSI_TAMBAHAN = 'v1';       // ditulis langkah ini
 var MULAI = '2019-01-01';        // Sentinel-2 L2A di Indonesia tersedia sejak sekitar akhir 2018
 var BATAS_PLTS = '2025-10-01';   // semua tanggal terpilih harus SEBELUM ini
 var TAHUN_TAMPIL = [2024];       // tahun yang dihitung untuk Console, misal [2022, 2023]
-var JARAK_MIN_HARI = 60;
+var JARAK_MIN_HARI = 30;
 var JARAK_MIN_M = 1000;          // jarak minimal petak D–F ke tepi petak A–C
 var MIN_WADUK_PCT = 50;          // minimal bagian petak di dalam batas waduk
 var MIN_APUNG_HA = 5;            // minimal vegetasi apung di petak D/F pada tanggalnya
 
 // Pusat petak [bujur, lintang]. Klik peta (Inspector) untuk membaca koordinat.
 var PETAK_BARU = [
-  {id: 'D', zona: 'Eceng gondok (lokasi 2)', kode: 'D1', pusat: null},
-  {id: 'E', zona: 'KJA (lokasi 2)',          kode: 'D2', pusat: null},
-  {id: 'F', zona: 'Eceng gondok (lokasi 3)', kode: 'D3', pusat: null}
+  {id: 'D', zona: 'Eceng gondok (lokasi 2)', kode: 'D1', pusat: [107.47059, -6.91453]},
+  {id: 'E', zona: 'KJA (lokasi 2)',          kode: 'D2', pusat: [107.41968, -6.91193]},
+  {id: 'F', zona: 'Eceng gondok (lokasi 3)', kode: 'D3', pusat: [107.46099, -6.93737]}
 ];
 
 // Diisi setelah mode 'cari' (format 'YYYY-MM-DD').
-var T3 = '';
-var D1 = '';   // untuk petak D
-var D2 = '';   // untuk petak E
-var D3 = '';   // untuk petak F
+var T3 = '2025-05-28';
+var D1 = '2023-04-24';   // untuk petak D
+var D2 = '2023-07-18';   // untuk petak E
+var D3 = '2024-06-22';   // untuk petak F
 
 // Kriteria waduk penuh (sama dengan Langkah 02)
 var MAX_TILE_CLOUD   = 60;
@@ -87,7 +87,7 @@ var MIN_TEREKAM_PCT  = 95;
 var MAX_AWAN_PCT     = 10;
 var MIN_AIR_PENUH    = 70;
 var MAX_SISA_PENUH   = 10;
-var MAKS_SELISIH_AIR = 2;
+var MAKS_SELISIH_AIR = 5;
 
 var AOI = ee.Geometry.Rectangle([107.28, -7.02, 107.58, -6.80]);
 var CRS = 'EPSG:32748';
@@ -199,14 +199,20 @@ function cekPetak() {
     var jarak = g.distance(gUtama, 1);
     var tumpangLain = baruTerisi.filter(function (q) { return q.id !== p.id; })
       .map(function (q) { return g.intersects(kotakUTM(q.pusat), 1); });
-    var tumpangLainAda = tumpangLain.length ? ee.List(tumpangLain).contains(true) : ee.Number(0).eq(1);
+    var tumpangLainAda = tumpangLain.length ? ee.List(tumpangLain).contains(true) : ee.Algorithms.IsEqual(1, 0);
+    var overlapUtama = g.intersects(gUtama, 1);
+    var tumpang = ee.Algorithms.If(overlapUtama, 'YA', ee.Algorithms.If(tumpangLainAda, 'YA', 'tidak'));
+    var lolos = ee.Algorithms.If(
+      wadukPct.gte(MIN_WADUK_PCT).and(jarak.gte(JARAK_MIN_M)),
+      ee.Algorithms.If(overlapUtama, 'TIDAK', ee.Algorithms.If(tumpangLainAda, 'TIDAK', 'Ya')),
+      'TIDAK'
+    );
     return ee.Feature(null, {
       petak: p.id, zona: p.zona, kode: p.kode,
       waduk_pct: wadukPct,
       jarak_ke_ABC_m: jarak,
-      tumpang_tindih: ee.Algorithms.If(g.intersects(gUtama, 1), 'YA', ee.Algorithms.If(tumpangLainAda, 'YA', 'tidak')),
-      lolos: ee.Algorithms.If(wadukPct.gte(MIN_WADUK_PCT).and(jarak.gte(JARAK_MIN_M))
-        .and(ee.Number(g.intersects(gUtama, 1)).not()).and(ee.Number(tumpangLainAda).not()), 'Ya', 'TIDAK')
+      tumpang_tindih: tumpang,
+      lolos: lolos
     });
   });
   print('Syarat petak D–F (waduk_pct >= ' + MIN_WADUK_PCT + ', jarak >= ' + JARAK_MIN_M +
@@ -335,7 +341,7 @@ if (MODE === 'cari') {
     jenis: 'tanggal', t3: T3, d1: D1, d2: D2, d3: D3,
     versi_petak: VERSI_PETAK, versi_tambahan: VERSI_TAMBAHAN
   })]));
-  Map.centerObject(semuaPetak, 12);
+  Map.centerObject(AOI, 12);
   [['T3', T3], ['D1', D1], ['D2', D2], ['D3', D3]].forEach(function (x) {
     Map.addLayer(mosaik(x[1]), {bands: ['B8', 'B4', 'B3'], min: 0, max: 4000}, x[0] + ' · false color', false);
   });
