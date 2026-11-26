@@ -61,7 +61,7 @@ var PETAK_KODE = {
 var TAMPIL = {petak: 'B', kode: 'T1', band: 'r_waduk'};
 
 var CRS = 'EPSG:32748';
-var GRID = [20, 0, 0, 0, -20, 0];
+var GRID = [10, 0, 0, 0, -10, 0];   // grid analisis 10 m
 var BAND = ['r_air', 'r_waduk', 'r_eg', 'r_kja'];
 var N = PENILAI.length;
 var AMBANG = Math.floor(N / 2) + 1;   // 3 dari 5

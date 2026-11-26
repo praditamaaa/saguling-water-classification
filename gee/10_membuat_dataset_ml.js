@@ -56,8 +56,8 @@ var ASSET = 'projects/earth-engine-511102/assets/';
 var VERSI_PETAK   = 'v1';        // dibaca (Langkah 05)
 var VERSI_TAMBAHAN = 'v1';       // dibaca (Langkah 05b)
 var VERSI_VOTE    = 'v2';        // dibaca (Langkah 06c)
-var VERSI_PETA    = 'v1';        // dibaca untuk cek konsistensi (Langkah 07)
-var VERSI_DATASET = 'v1';        // ditulis langkah ini (nama CSV)
+var VERSI_PETA    = 'v2';        // dibaca untuk cek konsistensi (Langkah 07, 26 konfigurasi)
+var VERSI_DATASET = 'v2';        // ditulis langkah ini (nama CSV); v2 = label vote v2
 
 var KODE = ['T1', 'T2', 'T3', 'D1', 'D2', 'D3'];   // tanggal yang diekspor dengan label
 var PETAK_KODE = {A: ['T1', 'T2', 'T3'], B: ['T1', 'T2', 'T3'], C: ['T1', 'T2', 'T3'],
@@ -67,17 +67,21 @@ var ILUSTRASI = '';              // opsional: tanggal terbaru 'YYYY-MM-DD' untuk
                                  // ilustrasi; area PLTS dimasker dengan lapisan 'plts'
 var TAMPIL = {petak: 'B', kode: 'T1'};
 
-// Konfigurasi segmentasi TERBAIK dari Langkah 08 (isi setelah Naskah 1).
-var TERBAIK = {indeks: 'MNDWI', ambang: 'canny'};   // indeks: NDWI|MNDWI; ambang: tetap|otsu|canny
+// Konfigurasi segmentasi TERBAIK dari Langkah 09 (peringkat 1 pada data LATIH).
+// indeks: NDWI | MNDWI | NDVI | GRAY | PCA1; ambang: tetap | otsu | canny
+// (ambang 'tetap' hanya untuk NDWI, MNDWI, NDVI).
+var TERBAIK = {indeks: 'MNDWI', ambang: 'canny'};
 
 // Parameter segmentasi: SALIN dari Langkah 07 (nilai final, Excel Tabel 8).
 var BUFFER_OTSU_M = 500;
 var TAU_C   = 0.3;
-var SIGMA   = 1;
-var L_MIN   = 10;
-var RB_PX   = 3;
-var R_CLOSE = 1;
+var SIGMA   = 2;
+var L_MIN   = 20;
+var RB_PX   = 6;
+var R_CLOSE = 2;
 var A_MAX   = 1024;
+var SKALA_GRAY = 0.3;
+var SKALA_PCA  = 3;
 
 // Parameter ekstraksi fitur (Tabel III Naskah 2).
 var RAD_SD     = 2;    // jendela simpangan baku lokal: (2*2+1) = 5x5 piksel 10 m
@@ -85,12 +89,13 @@ var GLCM_SIZE  = 1;    // jendela GLCM: 3x3 piksel 10 m
 var GLCM_LEVEL = 64;   // jumlah tingkat keabuan setelah kuantisasi NIR
 var NIR_MAX    = 4000; // reflektansi NIR (x10000) maksimum sebelum kuantisasi
 var TAU_C_FITUR = 0.3; // ambang Canny pada NDVI 10 m untuk kepadatan tepi
+var SIGMA_FITUR = 1;   // Gaussian Canny untuk kepadatan tepi (piksel 10 m)
 var RAD_TEPI   = 2;    // jendela kepadatan tepi: 5x5 piksel 10 m
 var R_TOPHAT   = 2;    // jari-jari elemen struktur top-hat (piksel 10 m)
 
 var AOI = ee.Geometry.Rectangle([107.28, -7.02, 107.58, -6.80]);
 var CRS = 'EPSG:32748';
-var GRID = [20, 0, 0, 0, -20, 0];
+var GRID = [10, 0, 0, 0, -10, 0];   // grid analisis 10 m
 var P10 = ee.Projection(CRS).atScale(10);
 var P20 = ee.Projection(CRS).atScale(20);
 
@@ -121,8 +126,8 @@ var poligonPlts = (typeof plts !== 'undefined') ? ee.FeatureCollection(plts) : e
 
 var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED').filterBounds(AOI);
 var L = ee.Image('JRC/GSW1_4/GlobalSurfaceWater').select('max_extent')
-  .unmask(0).eq(1).reproject(P20);
-var daerahHist = L.focalMax({radius: BUFFER_OTSU_M, units: 'meters'}).reproject(P20);
+  .unmask(0).eq(1).reproject(P10);
+var daerahHist = L.focalMax({radius: BUFFER_OTSU_M, units: 'meters'}).reproject(P10);
 
 function utama(id) { return ['A', 'B', 'C'].indexOf(id) >= 0; }
 function geomPetak(id) {
@@ -140,10 +145,95 @@ function mosaik(tgl) {
 function maskerBersih(scl) {
   return scl.neq(3).and(scl.neq(8)).and(scl.neq(9)).and(scl.neq(10));
 }
-// Rata-rata 2x2 piksel 10 m menjadi 1 piksel 20 m.
-function ke20(img10) {
-  return img10.setDefaultProjection(P10)
-    .reduceResolution({reducer: ee.Reducer.mean(), maxPixels: 16}).reproject(P20);
+// Pita 20 m di-resample ke grid 10 m dengan tetangga terdekat.
+function ke10(img20) {
+  return img20.setDefaultProjection(P20).reproject(P10);
+}
+
+
+// ---------------------------------------------------------------------
+// 1b. TRANSFORMASI SATU KANAL (SALINAN PERSIS DARI LANGKAH 07 BAGIAN 1b)
+// ---------------------------------------------------------------------
+var PITA = ['B2', 'B3', 'B4', 'B8', 'B5', 'B6', 'B7', 'B8A', 'B11', 'B12'];
+var TRANSFORMASI = [
+  {nama: 'NDWI',  tetap: true},
+  {nama: 'MNDWI', tetap: true},
+  {nama: 'NDVI',  tetap: true},
+  {nama: 'GRAY',  tetap: false},
+  {nama: 'PCA1',  tetap: false}
+];
+var NAMA_METODE = {tetap: 'Tetap 0', otsu: 'Otsu global', canny: 'Canny-Otsu'};
+
+// Daftar 26 konfigurasi dengan nomor K yang tetap (urutan Tabel IV naskah).
+function daftarKonfigurasi() {
+  var out = [], k = 0;
+  TRANSFORMASI.forEach(function (tr) {
+    (tr.tetap ? ['tetap', 'otsu', 'canny'] : ['otsu', 'canny']).forEach(function (m) {
+      ['Tanpa', 'Dengan'].forEach(function (p) {
+        k += 1;
+        out.push({k: 'K' + k, indeks: tr.nama, kunci: m, metode: NAMA_METODE[m], pasca: p});
+      });
+    });
+  });
+  return out;
+}
+var KONF = daftarKonfigurasi();
+
+// PCA per tanggal: rata-rata dan kovarians 10 pita di daerah histogram
+// (piksel bersih), lalu proyeksi ke vektor eigen pertama. Tanda diatur agar
+// air bernilai tinggi: muatan B8 (NIR) positif berarti air bernilai rendah,
+// jadi dikalikan -1.
+function pca1(img, ok) {
+  var daerah = daerahHist.and(ok);
+  var x = img.select(PITA);
+  var rata = x.updateMask(daerah).reduceRegion({
+    reducer: ee.Reducer.mean(), geometry: AOI, crs: CRS, crsTransform: GRID,
+    maxPixels: 1e10, tileScale: 4
+  });
+  var pusat = x.subtract(ee.Image.constant(rata.values(PITA)).rename(PITA));
+  var arr = pusat.toArray();
+  var cov = arr.updateMask(daerah).reduceRegion({
+    reducer: ee.Reducer.centeredCovariance(), geometry: AOI, crs: CRS, crsTransform: GRID,
+    maxPixels: 1e10, tileScale: 4
+  });
+  var eig = ee.Array(cov.get('array')).eigen();            // baris urut nilai eigen menurun
+  var lambda1 = ee.Number(eig.get([0, 0]));
+  var total = ee.Number(eig.slice(1, 0, 1).reduce(ee.Reducer.sum(), [0]).get([0, 0]));
+  var v1 = eig.slice(1, 1).slice(0, 0, 1);                  // 1 x 10
+  var tanda = ee.Number(v1.get([0, PITA.indexOf('B8')])).gte(0).multiply(-2).add(1);
+  var pc1 = ee.Image(v1).matrixMultiply(arr.toArray(1)).arrayGet([0, 0]);
+  return {
+    idx: pc1.divide(lambda1.sqrt()).multiply(tanda).divide(SKALA_PCA),
+    varRasio: lambda1.divide(total), tanda: tanda
+  };
+}
+
+// Mengembalikan {idx: citra 1 band bernama 'idx', info: {...}}.
+function transformasi(img, nama, ok) {
+  var x = img.select(PITA);
+  var idx, info = {};
+  if (nama === 'NDWI') idx = x.normalizedDifference(['B3', 'B8']);
+  if (nama === 'MNDWI') idx = x.normalizedDifference(['B3', 'B11']);
+  if (nama === 'NDVI') idx = x.normalizedDifference(['B8', 'B4']).multiply(-1);
+  if (nama === 'GRAY') {
+    idx = x.expression('0.299 * R + 0.587 * G + 0.114 * B',
+      {R: x.select('B4'), G: x.select('B3'), B: x.select('B2')})
+      .divide(SKALA_GRAY).min(1).multiply(-2).add(1);
+  }
+  if (nama === 'PCA1') {
+    var p = pca1(img, ok);
+    idx = p.idx;
+    info = {pca_var_rasio: p.varRasio, pca_tanda: p.tanda};
+  }
+  return {idx: idx.rename('idx').updateMask(ok), info: info};
+}
+
+var konfTerbaik = KONF.filter(function (c) {
+  return c.indeks === TERBAIK.indeks && c.kunci === TERBAIK.ambang;
+});
+if (konfTerbaik.length !== 2) {
+  throw new Error('TERBAIK tidak dikenal: ' + JSON.stringify(TERBAIK) +
+    '. Ambang tetap hanya untuk NDWI, MNDWI, NDVI.');
 }
 
 
@@ -181,20 +271,23 @@ function histogram(idx, masker) {
 function ambang(idx) {
   if (TERBAIK.ambang === 'tetap') return ee.Number(0);
   if (TERBAIK.ambang === 'otsu') return otsu(histogram(idx, daerahHist));
-  var tepi = ee.Algorithms.CannyEdgeDetector({image: idx.reproject(P20), threshold: TAU_C, sigma: SIGMA})
-    .gt(0).reproject(P20);
-  var panjang = tepi.selfMask().connectedPixelCount(256, true).reproject(P20);
+  var tepi = ee.Algorithms.CannyEdgeDetector({image: idx.reproject(P10), threshold: TAU_C, sigma: SIGMA})
+    .gt(0).reproject(P10);
+  var panjang = tepi.selfMask().connectedPixelCount(256, true).reproject(P10);
   var pita = panjang.gte(L_MIN).unmask(0)
-    .focalMax({radius: RB_PX, kernelType: 'square', units: 'pixels'}).reproject(P20).and(daerahHist);
+    .focalMax({radius: RB_PX, kernelType: 'square', units: 'pixels'}).reproject(P10).and(daerahHist);
   var hist = histogram(idx, pita);
   return ee.Number(ee.Algorithms.If(hist, otsu(hist), -9));
 }
 function pascaproses(w) {
   var tutup = w
-    .focalMax({radius: R_CLOSE, kernelType: 'circle', units: 'pixels'}).reproject(P20)
-    .focalMin({radius: R_CLOSE, kernelType: 'circle', units: 'pixels'}).reproject(P20);
-  var ukuran = tutup.not().selfMask().connectedPixelCount(A_MAX, false).reproject(P20);
-  var lubang = ukuran.lt(A_MAX).unmask(0);
+    .focalMax({radius: R_CLOSE, kernelType: 'circle', units: 'pixels'}).reproject(P10)
+    .focalMin({radius: R_CLOSE, kernelType: 'circle', units: 'pixels'}).reproject(P10);
+  // Ukuran lubang dihitung pada grid bantu 20 m (sama dengan Langkah 07).
+  var bukan = tutup.not();
+  var bukan20 = bukan.reduceResolution({reducer: ee.Reducer.max(), maxPixels: 16}).reproject(P20);
+  var ukuran = bukan20.selfMask().connectedPixelCount(A_MAX, false).reproject(P20);
+  var lubang = ukuran.lt(A_MAX).unmask(0).reproject(P10).and(bukan);
   return tutup.or(lubang).and(L);
 }
 
@@ -211,20 +304,20 @@ function pascaproses(w) {
 // ---------------------------------------------------------------------
 function fitur(kode) {
   var m = mosaik(TANGGAL[kode]);
-  var bersih = maskerBersih(m.select('SCL').setDefaultProjection(P20).reproject(P20));
+  var bersih = maskerBersih(ke10(m.select('SCL')));
 
-  // F0 — reflektansi (dibagi 10000). Pita 10 m dirata-rata ke 20 m.
-  var b10 = ke20(m.select(['B2', 'B3', 'B4', 'B8']));
-  var b20 = m.select(['B5', 'B6', 'B7', 'B8A', 'B11', 'B12']).setDefaultProjection(P20).reproject(P20);
+  // F0 — reflektansi (dibagi 10000). Pita 10 m apa adanya; pita 20 m di-resample.
+  var b10 = m.select(['B2', 'B3', 'B4', 'B8']).setDefaultProjection(P10).reproject(P10);
+  var b20 = ke10(m.select(['B5', 'B6', 'B7', 'B8A', 'B11', 'B12']));
   var F0 = b10.addBands(b20).toFloat().divide(10000);
 
-  // F1 — indeks (operasi titik antarpita), dihitung pada 20 m.
+  // F1 — indeks (operasi titik antarpita), dihitung pada 10 m.
   var F1 = ee.Image.cat(
     F0.normalizedDifference(['B3', 'B8']).rename('ndwi'),
     F0.normalizedDifference(['B3', 'B11']).rename('mndwi'),
     F0.normalizedDifference(['B8', 'B4']).rename('ndvi'));
 
-  // F2 — tekstur dan tepi dari pita 10 m, lalu dirata-rata ke 20 m.
+  // F2 — tekstur dan tepi dari pita 10 m.
   var nir10 = m.select('B8').setDefaultProjection(P10).reproject(P10);
   var sd = nir10.toFloat().divide(10000)
     .reduceNeighborhood({reducer: ee.Reducer.stdDev(),
@@ -234,12 +327,12 @@ function fitur(kode) {
     .select(['q_contrast', 'q_idm', 'q_ent'], ['glcm_kontras', 'glcm_homogen', 'glcm_entropi']);
   var ndvi10 = m.select(['B8', 'B4']).setDefaultProjection(P10).reproject(P10)
     .normalizedDifference(['B8', 'B4']);
-  var tepi10 = ee.Algorithms.CannyEdgeDetector({image: ndvi10, threshold: TAU_C_FITUR, sigma: SIGMA})
+  var tepi10 = ee.Algorithms.CannyEdgeDetector({image: ndvi10, threshold: TAU_C_FITUR, sigma: SIGMA_FITUR})
     .gt(0).reproject(P10);
   var kepadatan = tepi10.toFloat()
     .reduceNeighborhood({reducer: ee.Reducer.mean(), kernel: ee.Kernel.square(RAD_TEPI, 'pixels')})
     .reproject(P10).rename('kepadatan_tepi');
-  var F2 = ke20(sd.addBands(glcm).addBands(kepadatan));
+  var F2 = sd.addBands(glcm).addBands(kepadatan);
 
   // F3 — morfologi: top-hat pada NIR 10 m (objek kecil terang/gelap).
   var nirF = nir10.toFloat().divide(10000);
@@ -247,26 +340,28 @@ function fitur(kode) {
     .focalMax({radius: R_TOPHAT, kernelType: 'circle', units: 'pixels'}).reproject(P10);
   var tutup = nirF.focalMax({radius: R_TOPHAT, kernelType: 'circle', units: 'pixels'}).reproject(P10)
     .focalMin({radius: R_TOPHAT, kernelType: 'circle', units: 'pixels'}).reproject(P10);
-  var tophat = ke20(ee.Image.cat(nirF.subtract(buka).rename('tophat_putih'),
-    tutup.subtract(nirF).rename('tophat_hitam')));
+  var tophat = ee.Image.cat(nirF.subtract(buka).rename('tophat_putih'),
+    tutup.subtract(nirF).rename('tophat_hitam'));
 
   // F3 — bentuk dari hasil segmentasi terbaik:
-  //   air_pcd   = peta air tanpa pascaproses (indeks > ambang, dibatasi L)
+  //   air_pcd   = peta air tanpa pascaproses (kanal > ambang, dibatasi L)
   //   waduk_pcd = peta setelah closing + hole filling (masker permukaan waduk)
   //   kandidat  = waduk_pcd DAN BUKAN air_pcd (lubang yang terisi = objek apung)
-  var idx = (TERBAIK.indeks === 'NDWI' ? F1.select('ndwi') : F1.select('mndwi'))
-    .rename('idx').updateMask(bersih);
+  var idx = transformasi(F0, TERBAIK.indeks, bersih).idx;   // kanal 'air tinggi'
   var t = ambang(idx);
   var w = idx.gt(t).unmask(0);
   var airPcd = w.and(L).rename('air_pcd');
   var wadukPcd = pascaproses(w).rename('waduk_pcd');
   var kandidat = wadukPcd.and(airPcd.not());
-  var luas = kandidat.selfMask().connectedPixelCount(1024, false).reproject(P20)
-    .unmask(0).rename('luas_komponen');          // piksel 20 m; 0 = bukan kandidat
-  var jarak = airPcd.fastDistanceTransform(256).sqrt().multiply(20)
-    .reproject(P20).rename('jarak_air');         // meter ke piksel air terdekat
+  // Luas komponen dalam hektare, dihitung pada grid bantu 20 m karena batas
+  // GEE 1024 piksel (1024 x 0,04 ha = ±41 ha); 0 = bukan kandidat.
+  var kand20 = kandidat.reduceResolution({reducer: ee.Reducer.max(), maxPixels: 16}).reproject(P20);
+  var luas = kand20.selfMask().connectedPixelCount(1024, false).reproject(P20)
+    .multiply(0.04).unmask(0).reproject(P10).multiply(kandidat).rename('luas_komponen');
+  var jarak = airPcd.fastDistanceTransform(256).sqrt().multiply(10)
+    .reproject(P10).rename('jarak_air');         // meter ke piksel air terdekat
 
-  var xy = ee.Image.pixelCoordinates(P20).rename(['x', 'y']);
+  var xy = ee.Image.pixelCoordinates(P10).rename(['x', 'y']);
   return {
     img: ee.Image.cat(F0, F1, F2, tophat, luas, jarak, airPcd, wadukPcd,
       bersih.rename('bersih'), xy).updateMask(bersih),
@@ -300,7 +395,7 @@ function label(id, kode) {
     .where(lab.eq(2), v.select('sepakat_r_kja'))
     .where(lab.eq(3), v.select('sepakat_r_waduk'))
     .rename('sepakat');
-  return lab.addBands(sep).toInt().reproject(P20);
+  return lab.addBands(sep).toInt().reproject(P10);
 }
 
 // Hentikan bila ada Asset vote yang belum ada.
@@ -319,12 +414,12 @@ if (hilang.length > 0 && MODE !== 'ekspor_waduk') {
 }
 
 // Piksel PLTS dikeluarkan (hanya berpengaruh pada peta ILUSTRASI).
-var bukanPlts = ee.Image(1).paint(poligonPlts, 0).reproject(P20);
+var bukanPlts = ee.Image(1).paint(poligonPlts, 0).reproject(P10);
 
 function samplePetak(id, kode, f) {
   var img = f.img.addBands(label(id, kode));
   return img.sample({
-    region: geomPetak(id), projection: P20, scale: 20,
+    region: geomPetak(id), projection: P10, scale: 10,
     geometries: false, tileScale: 4
   }).map(function (ft) {
     return ft.set({petak: id, kode: kode, tanggal: TANGGAL[kode]});
@@ -343,12 +438,12 @@ if (MODE === 'periksa') {
   var g = geomPetak(TAMPIL.petak);
   Map.centerObject(g, 15);
   Map.setOptions('SATELLITE');
-  Map.addLayer(fT.img.select(['B8', 'B4', 'B3']).clip(g.buffer(300)), {min: 0, max: 0.4}, 'False color 20 m');
+  Map.addLayer(fT.img.select(['B8', 'B4', 'B3']).clip(g.buffer(300)), {min: 0, max: 0.4}, 'False color 10 m');
   Map.addLayer(fT.img.select('ndvi').clip(g), {min: -0.5, max: 0.8, palette: ['0571b0', 'f7f7f7', '1a9641']}, 'F1 NDVI', false);
   Map.addLayer(fT.img.select('glcm_kontras').clip(g), {min: 0, max: 50, palette: ['000000', 'ffffff']}, 'F2 GLCM kontras', false);
   Map.addLayer(fT.img.select('kepadatan_tepi').clip(g), {min: 0, max: 0.5, palette: ['000000', 'ffff00']}, 'F2 kepadatan tepi', false);
   Map.addLayer(fT.img.select('tophat_putih').clip(g), {min: 0, max: 0.05, palette: ['000000', 'ff00ff']}, 'F3 top-hat putih', false);
-  Map.addLayer(fT.img.select('luas_komponen').selfMask().clip(g), {min: 1, max: 300, palette: ['fee391', 'cc4c02']}, 'F3 luas komponen kandidat', false);
+  Map.addLayer(fT.img.select('luas_komponen').selfMask().clip(g), {min: 0.04, max: 20, palette: ['fee391', 'cc4c02']}, 'F3 luas komponen kandidat (ha)', false);
   Map.addLayer(fT.img.select('waduk_pcd').selfMask().clip(g), {palette: ['ff9100'], opacity: 0.4}, 'Masker waduk PCD', false);
   Map.addLayer(fT.img.select('air_pcd').selfMask().clip(g), {palette: ['2166ac'], opacity: 0.5}, 'Air PCD', false);
   if (KODE.indexOf(TAMPIL.kode) >= 0) {
@@ -381,14 +476,13 @@ if (MODE === 'periksa') {
   }
 
   // Uji konsistensi: masker PCD di skrip ini vs Asset peta Langkah 07 (T1).
-  var nomor = (TERBAIK.indeks === 'NDWI' ? 0 : 6) +
-    {tetap: 0, otsu: 2, canny: 4}[TERBAIK.ambang];
+  var kTanpa = konfTerbaik[0].k, kDengan = konfTerbaik[1].k;
   var peta07 = ee.Image(ASSET + 'saguling_peta_T1_' + VERSI_PETA);
   var f1 = fitur('T1').img;
   var cocok = ee.Image.cat(
-    f1.select('air_pcd').eq(peta07.select('K' + (nomor + 1))).rename('air'),
-    f1.select('waduk_pcd').eq(peta07.select('K' + (nomor + 2))).rename('waduk'));
-  print('Kecocokan dengan Langkah 07 (K' + (nomor + 1) + ' dan K' + (nomor + 2) + ', harus ~1.0):',
+    f1.select('air_pcd').eq(peta07.select(kTanpa)).rename('air'),
+    f1.select('waduk_pcd').eq(peta07.select(kDengan)).rename('waduk'));
+  print('Kecocokan dengan Langkah 07 (' + kTanpa + ' dan ' + kDengan + ', harus ~1.0):',
     cocok.reduceRegion({reducer: ee.Reducer.mean(), geometry: petakFC.geometry(),
       crs: CRS, crsTransform: GRID, maxPixels: 1e8}));
 
@@ -414,7 +508,7 @@ if (MODE === 'periksa') {
   daftarWaduk.forEach(function (kode) {
     var f = fitur(kode);
     var img = f.img.updateMask(f.img.select('waduk_pcd')).updateMask(bukanPlts);
-    var fc = img.sample({region: AOI, projection: P20, scale: 20, geometries: false, tileScale: 8})
+    var fc = img.sample({region: AOI, projection: P10, scale: 10, geometries: false, tileScale: 8})
       .map(function (ft) { return ft.set({kode: kode, tanggal: TANGGAL[kode]}); });
     Export.table.toDrive({
       collection: fc,

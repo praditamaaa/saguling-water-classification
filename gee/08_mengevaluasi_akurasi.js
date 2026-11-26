@@ -1,16 +1,22 @@
 // =====================================================================
 // LANGKAH 08 — MENGEVALUASI AKURASI
 // ---------------------------------------------------------------------
-// Tujuan   : Membandingkan 24 peta hasil (Langkah 07) dengan referensi
-//            hasil voting lima penilai (Langkah 06c), piksel demi piksel.
-// Masukan  : Asset saguling_petak_<v>, saguling_peta_T1/T2_<v>,
-//            saguling_ref_<petak>_<T>_vote_<v>.
+// Tujuan   : Membandingkan peta 26 konfigurasi (Langkah 07) dengan
+//            referensi hasil voting lima penilai (Langkah 06c), piksel demi
+//            piksel, pada 12 kombinasi petak x tanggal.
+// Masukan  : Asset saguling_petak_<v>, saguling_tambahan_<v>,
+//            saguling_peta_<kode>_<v>, saguling_ref_<petak>_<T>_vote_<v>.
 // Keluaran : - Console: tabel silsilah versi (referensi cocok dengan petak?).
-//            - CSV 08_evaluasi_<versi ref>_<versi peta>.csv (432 baris =
-//              3 petak x 2 tanggal x 12 konfigurasi x 2 referensi x
-//              3 tingkat kesepakatan)
+//            - CSV 08_evaluasi_<versi ref>_<versi peta>.csv (1872 baris =
+//              12 kombinasi x 26 konfigurasi x 2 referensi x 3 tingkat
+//              kesepakatan). Kolom 'peran': latih (A–C pada T1, T2; D, E, F)
+//              atau uji (A–C pada T3).
 //            - Peta galat dan 4 tautan PNG untuk Gambar 2 naskah.
 // Dipakai  : Langkah 09 dan Excel Tabel 11–12.
+//
+// PEMILIHAN KONFIGURASI TERBAIK
+//   Konfigurasi terbaik dipilih dari baris peran 'latih' saja (Langkah 09).
+//   Baris 'uji' (T3) hanya dilaporkan, tidak ikut menentukan pilihan.
 //
 // TINGKAT KESEPAKATAN (kolom 'tingkat')
 //   semua = semua piksel petak
@@ -50,11 +56,12 @@
 // ---------------------------------------------------------------------
 var ASSET = 'projects/earth-engine-511102/assets/';
 var VERSI_PETAK = 'v1';   // dari Langkah 05
+var VERSI_TAMBAHAN = 'v1';     // dari Langkah 05b
 var VERSI_REF   = 'vote_v2';   // dari Langkah 06c (v2 = setelah kalibrasi ulang)
-var VERSI_PETA  = 'v1';        // dari Langkah 07
+var VERSI_PETA  = 'v2';        // dari Langkah 07 (v2 = 26 konfigurasi)
 var N_PENILAI   = 5;
 var CRS = 'EPSG:32748';
-var GRID = [20, 0, 0, 0, -20, 0];
+var GRID = [10, 0, 0, 0, -10, 0];   // grid analisis 10 m
 
 // Gambar 2: petak, tanggal, konfigurasi, dan referensi yang ditampilkan.
 var TAMPIL = {petak: 'B', kode: 'T1', konf: 'K12', ref: 'r_waduk'};
@@ -66,23 +73,25 @@ var TINGKAT = [
   {t: 'penuh', min: N_PENILAI}
 ];
 
-var KONF = [
-  {k: 'K1', indeks: 'NDWI', metode: 'Tetap 0', pasca: 'Tanpa'},
-  {k: 'K2', indeks: 'NDWI', metode: 'Tetap 0', pasca: 'Dengan'},
-  {k: 'K3', indeks: 'NDWI', metode: 'Otsu global', pasca: 'Tanpa'},
-  {k: 'K4', indeks: 'NDWI', metode: 'Otsu global', pasca: 'Dengan'},
-  {k: 'K5', indeks: 'NDWI', metode: 'Canny-Otsu', pasca: 'Tanpa'},
-  {k: 'K6', indeks: 'NDWI', metode: 'Canny-Otsu', pasca: 'Dengan'},
-  {k: 'K7', indeks: 'MNDWI', metode: 'Tetap 0', pasca: 'Tanpa'},
-  {k: 'K8', indeks: 'MNDWI', metode: 'Tetap 0', pasca: 'Dengan'},
-  {k: 'K9', indeks: 'MNDWI', metode: 'Otsu global', pasca: 'Tanpa'},
-  {k: 'K10', indeks: 'MNDWI', metode: 'Otsu global', pasca: 'Dengan'},
-  {k: 'K11', indeks: 'MNDWI', metode: 'Canny-Otsu', pasca: 'Tanpa'},
-  {k: 'K12', indeks: 'MNDWI', metode: 'Canny-Otsu', pasca: 'Dengan'}
+// 26 konfigurasi, urutan dan nomor sama dengan Langkah 07.
+var TRANSFORMASI = [
+  {nama: 'NDWI', tetap: true}, {nama: 'MNDWI', tetap: true}, {nama: 'NDVI', tetap: true},
+  {nama: 'GRAY', tetap: false}, {nama: 'PCA1', tetap: false}
 ];
+var NAMA_METODE = {tetap: 'Tetap 0', otsu: 'Otsu global', canny: 'Canny-Otsu'};
+var KONF = [];
+TRANSFORMASI.forEach(function (tr) {
+  (tr.tetap ? ['tetap', 'otsu', 'canny'] : ['otsu', 'canny']).forEach(function (m) {
+    ['Tanpa', 'Dengan'].forEach(function (p) {
+      KONF.push({k: 'K' + (KONF.length + 1), indeks: tr.nama, metode: NAMA_METODE[m], pasca: p});
+    });
+  });
+});
 var REF = ['r_air', 'r_waduk'];
-var PETAK = ['A', 'B', 'C'];
-var KODE = ['T1', 'T2'];
+// Kombinasi petak x tanggal yang punya referensi (sama dengan Langkah 06c dan 10).
+var PETAK_KODE = {A: ['T1', 'T2', 'T3'], B: ['T1', 'T2', 'T3'], C: ['T1', 'T2', 'T3'],
+                  D: ['D1'], E: ['D2'], F: ['D3']};
+function peran(kode) { return kode === 'T3' ? 'uji' : 'latih'; }
 
 
 // ---------------------------------------------------------------------
@@ -95,8 +104,34 @@ var TANGGAL = {
   T1: ee.String(petakFC.first().get('t1')),
   T2: ee.String(petakFC.first().get('t2'))
 };
+var idTambahan = ASSET + 'saguling_tambahan_' + VERSI_TAMBAHAN;
+var adaTambahan = false;
+try { adaTambahan = ee.data.getAsset(idTambahan) !== null; } catch (e) { adaTambahan = false; }
+var tambahan = adaTambahan ? ee.FeatureCollection(idTambahan) : ee.FeatureCollection([]);
+if (adaTambahan) {
+  var fTgl = ee.Feature(tambahan.filter(ee.Filter.eq('jenis', 'tanggal')).first());
+  ['T3', 'D1', 'D2', 'D3'].forEach(function (k) { TANGGAL[k] = ee.String(fTgl.get(k.toLowerCase())); });
+}
+// Kombinasi yang Asset referensi DAN petanya sudah ada.
+function ada(path) {
+  try { return ee.data.getAsset(path) !== null; } catch (e) { return false; }
+}
+var KOMBO = [], terlewat = [];
+Object.keys(PETAK_KODE).forEach(function (id) {
+  PETAK_KODE[id].forEach(function (kode) {
+    if (kode in TANGGAL && ada(pathRef(id + '_' + kode)) && ada(pathPeta(kode))) {
+      KOMBO.push({id: id, kode: kode});
+    } else {
+      terlewat.push(id + '_' + kode);
+    }
+  });
+});
+if (terlewat.length > 0) {
+  print('Dilewati (referensi atau peta belum ada):', terlewat);
+}
 function geomPetak(id) {
-  return petakFC.filter(ee.Filter.eq('id', id)).geometry();
+  var fc = ['A', 'B', 'C'].indexOf(id) >= 0 ? petakFC : tambahan.filter(ee.Filter.eq('jenis', 'petak'));
+  return fc.filter(ee.Filter.eq('id', id)).geometry();
 }
 // Pembagian aman: -1 bila pembagi nol.
 function bagi(a, b) {
@@ -113,16 +148,15 @@ function bagi(a, b) {
 //     Peta (Langkah 07) mencakup seluruh waduk, jadi tidak wajib cocok;
 //     parameternya dicetak untuk dicatat.
 // ---------------------------------------------------------------------
-var daftarRef = [];
-PETAK.forEach(function (id) {
-  KODE.forEach(function (kode) { daftarRef.push(id + '_' + kode); });
-});
-var silsilah = ee.FeatureCollection(daftarRef.map(function (kunci) {
+// Petak A–C harus cocok dengan VERSI_PETAK; D–F dengan 'tambahan_' + VERSI_TAMBAHAN.
+var silsilah = ee.FeatureCollection(KOMBO.map(function (c) {
+  var kunci = c.id + '_' + c.kode;
   var v = ee.Image(pathRef(kunci)).get('versi_petak');
+  var harus = ['A', 'B', 'C'].indexOf(c.id) >= 0 ? VERSI_PETAK : 'tambahan_' + VERSI_TAMBAHAN;
   return ee.Feature(null, {
     referensi: kunci + '_' + VERSI_REF,
     versi_petak_saat_digambar: v,
-    cocok: ee.Algorithms.If(ee.Algorithms.IsEqual(v, VERSI_PETAK), 'Ya', 'TIDAK, gambar ulang')
+    cocok: ee.Algorithms.If(ee.Algorithms.IsEqual(v, harus), 'Ya', 'TIDAK, gambar ulang')
   });
 }));
 print('Silsilah referensi vs petak ' + VERSI_PETAK + ' (semua harus "Ya"):',
@@ -134,12 +168,12 @@ print('Parameter peta T1 ' + VERSI_PETA + ':', ee.Image(pathPeta('T1')).toDictio
 // ---------------------------------------------------------------------
 // 2. MATRIKS KESALAHAN
 //    Agar hemat, untuk tiap petak x tanggal dibuat satu citra berisi
-//    12 konfigurasi x 2 referensi x 3 tingkat x TP/FP/FN/TN, ditambah
+//    26 konfigurasi x 2 referensi x 3 tingkat x TP/FP/FN/TN, ditambah
 //    hitungan piksel eceng gondok dan KJA, lalu dijumlahkan SEKALI.
 // ---------------------------------------------------------------------
 function evaluasi(idPetak, kode) {
   var geom = geomPetak(idPetak);
-  var pred = ee.Image(pathPeta(kode));                    // K1..K12
+  var pred = ee.Image(pathPeta(kode));                    // K1..K26
   var ref = ee.Image(pathRef(idPetak + '_' + kode));     // hasil voting
   var valid = pred.select('K1').mask().gt(0);     // piksel tak berawan
   var eg = ref.select('r_eg').unmask(0);
@@ -182,7 +216,7 @@ function evaluasi(idPetak, kode) {
         var TN = ee.Number(jumlah.get(pre + 'TN'));
         var semua = tk.t === 'semua';
         baris.push(ee.Feature(null, {
-          petak: idPetak, kode: kode, tanggal: TANGGAL[kode],
+          petak: idPetak, kode: kode, tanggal: TANGGAL[kode], peran: peran(kode),
           versi_petak: VERSI_PETAK, versi_ref: VERSI_REF, versi_peta: VERSI_PETA,
           konf: c.k, indeks: c.indeks, metode: c.metode, pasca: c.pasca, referensi: rn,
           tingkat: tk.t,
@@ -205,9 +239,7 @@ function evaluasi(idPetak, kode) {
 }
 
 var semua = [];
-PETAK.forEach(function (id) {
-  KODE.forEach(function (kode) { semua = semua.concat(evaluasi(id, kode)); });
-});
+KOMBO.forEach(function (c) { semua = semua.concat(evaluasi(c.id, c.kode)); });
 var hasil = ee.FeatureCollection(semua);   // urutan: petak, tanggal, konfigurasi, referensi, tingkat
 
 // Console hanya menampilkan SATU petak x tanggal (satu reduceRegion), agar
@@ -221,7 +253,7 @@ print('IoU terhadap r_air, petak B, T1, semua piksel:', ui.Chart.feature.byFeatu
 Export.table.toDrive({
   collection: hasil, description: '08_evaluasi_' + VERSI_REF + '_' + VERSI_PETA,
   folder: 'PCD_Saguling', fileFormat: 'CSV',
-  selectors: ['petak', 'kode', 'tanggal', 'konf', 'indeks', 'metode', 'pasca', 'referensi',
+  selectors: ['petak', 'kode', 'tanggal', 'peran', 'konf', 'indeks', 'metode', 'pasca', 'referensi',
     'tingkat', 'TP', 'FP', 'FN', 'TN', 'precision', 'recall', 'f1', 'iou', 'oa',
     'bias_luas_pct', 'eg_n', 'eg_terbaca_air', 'kja_n', 'kja_terbaca_air',
     'versi_petak', 'versi_ref', 'versi_peta']
